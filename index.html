@@ -1,0 +1,3651 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Pulse Pro — Real-Time Market Analysis & Trading Terminal</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            bg: '#0b0f17',
+            panel: '#111827',
+            panelAlt: '#161f30',
+            border: '#1f2937',
+            bull: '#10b981',
+            bear: '#ef4444',
+            accent: '#3b82f6',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #0b0f17;
+      color: #e5e7eb;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f17; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    @keyframes flashGreen {
+      0% { background-color: rgba(16, 185, 129, 0.28); }
+      100% { background-color: transparent; }
+    }
+    @keyframes flashRed {
+      0% { background-color: rgba(239, 68, 68, 0.28); }
+      100% { background-color: transparent; }
+    }
+    .flash-up { animation: flashGreen 0.45s ease-out; }
+    .flash-down { animation: flashRed 0.45s ease-out; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden">
+  <!-- Top Market Bar -->
+  <header class="bg-panel border-b border-border px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold text-sm">
+          NP
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white tracking-tight text-sm sm:text-base">NSE Pulse Pro</span>
+            <span id="feedBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              SIMULATED NSE LIVE
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Index Tickers -->
+      <div class="hidden xl:flex items-center gap-4 ml-4 pl-4 border-l border-border text-xs">
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400 font-medium">NIFTY 50</span>
+          <span id="hdrNiftyPrice" class="font-mono font-semibold text-white tabular-nums">25,514.30</span>
+          <span id="hdrNiftyChg" class="font-mono text-emerald-400 tabular-nums">+1.14%</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400 font-medium">BANK NIFTY</span>
+          <span id="hdrBankPrice" class="font-mono font-semibold text-white tabular-nums">64,635.20</span>
+          <span id="hdrBankChg" class="font-mono text-emerald-400 tabular-nums">+2.49%</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400 font-medium">INDIA VIX</span>
+          <span id="hdrVixPrice" class="font-mono font-semibold text-amber-400 tabular-nums">13.85</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls & Account Summary -->
+    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div class="flex items-center bg-bg border border-border rounded-lg p-0.5 text-xs" title="Tick Simulation Speed">
+        <button data-speed="1000" class="speed-btn px-2 py-1 rounded-md text-gray-400 hover:text-white transition">1x</button>
+        <button data-speed="450" class="speed-btn px-2 py-1 rounded-md text-gray-400 hover:text-white transition">2x</button>
+        <button data-speed="0" class="speed-btn px-2 py-1 rounded-md bg-blue-600 text-white font-medium transition">Pause</button>
+      </div>
+
+      <button id="openAutomationBtn" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-xs font-semibold text-white shadow-md shadow-indigo-500/20 border border-indigo-400/40 transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <span>Automation with tools</span>
+      </button>
+
+      <button id="openCloudSyncBtn" class="px-2.5 py-1.5 rounded-lg bg-panelAlt hover:bg-gray-800 border border-border text-xs font-medium text-emerald-400 transition flex items-center gap-1.5" title="Supabase Cloud Sync & Login">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+        <span id="cloudSyncBtnLabel">Log In</span>
+      </button>
+
+      <button id="openSettingsBtn" class="px-2.5 py-1.5 rounded-lg bg-panelAlt hover:bg-gray-800 border border-border text-xs font-medium text-gray-200 transition flex items-center gap-1.5" title="Monitor & Risk Settings">
+        <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span>Settings</span>
+      </button>
+
+      <button id="openBrokerModalBtn" class="px-2.5 py-1.5 rounded-lg bg-panelAlt hover:bg-gray-800 border border-border text-xs font-medium text-blue-400 transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span>Live Data API</span>
+      </button>
+
+      <div class="flex items-center gap-3 bg-bg border border-border rounded-lg px-3 py-1 text-xs">
+        <div>
+          <span class="text-gray-400 mr-1">Virtual Cash:</span>
+          <span id="hdrMargin" class="font-mono font-semibold text-white tabular-nums">₹10,00,000.00</span>
+        </div>
+        <div class="hidden sm:block border-l border-border pl-3">
+          <span class="text-gray-400 mr-1">Used:</span>
+          <span id="hdrUsedMargin" class="font-mono font-semibold text-amber-300 tabular-nums">₹0.00</span>
+        </div>
+        <div class="border-l border-border pl-3">
+          <span class="text-gray-400 mr-1">P&amp;L:</span>
+          <span id="hdrPnl" class="font-mono font-semibold text-emerald-400 tabular-nums">₹0.00</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Automated Sell-Signal Monitor Banner -->
+  <div id="sellAlertBanner" class="hidden bg-red-950/90 border-b border-red-500/50 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-2.5 text-xs">
+      <span class="px-2 py-0.5 rounded bg-red-600 text-white font-bold animate-pulse">SELL ALERT</span>
+      <span id="sellAlertText" class="text-red-100 font-medium"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="sellAlertSquareOffBtn" class="px-3 py-1 rounded-md bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition">Square Off Now</button>
+      <button id="sellAlertDismissBtn" class="px-2.5 py-1 rounded-md bg-bg/70 hover:bg-gray-800 text-gray-300 text-xs">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- Main Workspace Grid -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-2.5 p-2.5 max-w-[1920px] w-full mx-auto">
+    <!-- Left Column: Watchlist & Live Scanner -->
+    <section class="lg:col-span-3 bg-panel border border-border rounded-xl flex flex-col overflow-hidden min-h-[380px] lg:max-h-[820px]">
+      <div class="p-3 border-b border-border space-y-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">NSE Watchlist &amp; Signals</h2>
+          <span id="watchlistCount" class="text-[11px] font-mono text-gray-500">12 symbols</span>
+        </div>
+        <input id="symbolSearch" type="text" placeholder="Filter symbol (e.g. HDFC, TCS)..." class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+        <div class="flex flex-wrap gap-1">
+          <button data-filter="all" class="wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-blue-600 text-white">All</button>
+          <button data-filter="bullish" class="wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-bg text-gray-400 hover:text-white">Bullish</button>
+          <button data-filter="bearish" class="wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-bg text-gray-400 hover:text-white">Bearish</button>
+          <button data-filter="vol" class="wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-bg text-gray-400 hover:text-white">Vol Spike</button>
+        </div>
+      </div>
+
+      <div id="watchlistContainer" class="flex-1 overflow-y-auto divide-y divide-border/60">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- Center Column: Chart + Real-Time Technical Analysis -->
+    <section class="lg:col-span-6 flex flex-col gap-2.5">
+      <!-- Chart Card -->
+      <div class="bg-panel border border-border rounded-xl p-3 flex flex-col gap-2.5">
+        <!-- Symbol Header -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border">
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 id="activeSymbolTitle" class="text-lg font-bold text-white">HDFCBANK</h1>
+              <span id="activeSectorBadge" class="text-[11px] px-2 py-0.5 rounded bg-panelAlt text-gray-300 border border-border">Banking</span>
+              <span id="activeSignalPill" class="text-[11px] px-2 py-0.5 rounded font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">BUY</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-400 font-mono tabular-nums">
+              <span>O: <strong id="statOpen" class="text-gray-200">815.50</strong></span>
+              <span>H: <strong id="statHigh" class="text-gray-200">851.20</strong></span>
+              <span>L: <strong id="statLow" class="text-gray-200">814.10</strong></span>
+              <span>Vol: <strong id="statVol" class="text-gray-200">4.21M</strong></span>
+            </div>
+          </div>
+
+          <div class="text-right">
+            <div id="activeLtp" class="text-2xl font-mono font-bold text-white tabular-nums">₹846.00</div>
+            <div id="activeChg" class="text-xs font-mono font-medium text-emerald-400 tabular-nums">+24.20 (+2.94%)</div>
+          </div>
+        </div>
+
+        <!-- Chart Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1 bg-bg p-0.5 rounded-lg border border-border">
+            <button data-tf="1m" class="tf-btn px-2 py-1 rounded bg-blue-600 text-white font-medium">1m</button>
+            <button data-tf="5m" class="tf-btn px-2 py-1 rounded text-gray-400 hover:text-white">5m</button>
+            <button data-tf="15m" class="tf-btn px-2 py-1 rounded text-gray-400 hover:text-white">15m</button>
+            <button data-tf="1H" class="tf-btn px-2 py-1 rounded text-gray-400 hover:text-white">1H</button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button data-overlay="ema9" class="overlay-btn px-2 py-1 rounded border text-[11px] font-medium bg-amber-500/15 border-amber-500/40 text-amber-300">EMA 9</button>
+            <button data-overlay="ema21" class="overlay-btn px-2 py-1 rounded border text-[11px] font-medium bg-purple-500/15 border-purple-500/40 text-purple-300">EMA 21</button>
+            <button data-overlay="vwap" class="overlay-btn px-2 py-1 rounded border text-[11px] font-medium bg-cyan-500/15 border-cyan-500/40 text-cyan-300">VWAP</button>
+            <button data-overlay="bb" class="overlay-btn px-2 py-1 rounded border text-[11px] font-medium bg-bg border-border text-gray-400">BB(20)</button>
+            <button data-overlay="pivots" class="overlay-btn px-2 py-1 rounded border text-[11px] font-medium bg-bg border-border text-gray-400">Pivots</button>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1 bg-bg p-0.5 rounded-lg border border-border">
+              <button data-sub="volume" class="sub-btn px-2 py-1 rounded bg-gray-700 text-white text-[11px]">Vol</button>
+              <button data-sub="rsi" class="sub-btn px-2 py-1 rounded text-gray-400 hover:text-white text-[11px]">RSI</button>
+              <button data-sub="macd" class="sub-btn px-2 py-1 rounded text-gray-400 hover:text-white text-[11px]">MACD</button>
+            </div>
+            <div class="flex items-center gap-1 bg-bg p-0.5 rounded-lg border border-border">
+              <button data-chartmode="analysis" class="chartmode-btn px-2 py-1 rounded bg-blue-600 text-white text-[11px] font-medium">Analysis</button>
+              <button data-chartmode="tv" class="chartmode-btn px-2 py-1 rounded text-gray-400 hover:text-white text-[11px] font-medium">TradingView NSE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Candlestick + Sub-pane Canvas -->
+        <div id="analysisChartWrap" class="relative w-full h-[320px] sm:h-[360px] bg-bg rounded-lg border border-border overflow-hidden">
+          <canvas id="marketChart" class="w-full h-full block cursor-crosshair"></canvas>
+          <div id="chartTooltip" class="hidden absolute top-2 left-2 pointer-events-none bg-panel/95 border border-border rounded-md px-2.5 py-1.5 text-[11px] font-mono text-gray-200 shadow-lg space-y-0.5"></div>
+        </div>
+        <div id="tvChartWrap" class="hidden relative w-full h-[320px] sm:h-[360px] bg-bg rounded-lg border border-border overflow-hidden">
+          <div id="tvChartContainer" class="w-full h-full"></div>
+        </div>
+      </div>
+
+      <!-- Real-Time Market Analysis Engine -->
+      <div class="bg-panel border border-border rounded-xl p-3 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Real-Time Technical Analysis Engine</h2>
+            <p id="signalSummaryText" class="text-xs text-gray-300 mt-0.5">Evaluating live tick stream...</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">Composite Score:</span>
+            <span id="compositeScoreBadge" class="font-mono font-bold text-sm px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">+42 / 100</span>
+          </div>
+        </div>
+
+        <!-- Score Progress Bar -->
+        <div class="w-full h-2 bg-bg rounded-full overflow-hidden border border-border flex">
+          <div id="scoreBarFill" class="h-full bg-emerald-500 transition-all duration-300" style="width: 71%"></div>
+        </div>
+
+        <!-- 6 Live Indicator Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>RSI (14)</span>
+              <span id="indRsiTag" class="font-semibold text-emerald-400">Bullish</span>
+            </div>
+            <div id="indRsiVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">58.4</div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>MACD (12,26,9)</span>
+              <span id="indMacdTag" class="font-semibold text-emerald-400">Bullish</span>
+            </div>
+            <div id="indMacdVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">+1.84</div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>VWAP Dev</span>
+              <span id="indVwapTag" class="font-semibold text-emerald-400">Above</span>
+            </div>
+            <div id="indVwapVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">+0.45%</div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>EMA 9 / 21</span>
+              <span id="indEmaTag" class="font-semibold text-emerald-400">Golden</span>
+            </div>
+            <div id="indEmaVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">844.1 / 839.6</div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>Vol Surge</span>
+              <span id="indVolTag" class="font-semibold text-amber-400">High</span>
+            </div>
+            <div id="indVolVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">1.62x avg</div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] text-gray-400 flex justify-between">
+              <span>ATR (14)</span>
+              <span id="indAtrTag" class="font-semibold text-gray-300">Volatility</span>
+            </div>
+            <div id="indAtrVal" class="text-base font-mono font-semibold text-white mt-0.5 tabular-nums">₹6.40</div>
+          </div>
+        </div>
+
+        <!-- Pivot Levels & Live Event Feed -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div class="bg-bg border border-border rounded-lg p-2.5">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Session Pivot Levels</div>
+            <div id="pivotGrid" class="grid grid-cols-5 gap-1 text-center font-mono text-[11px] tabular-nums">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="bg-bg border border-border rounded-lg p-2.5 flex flex-col">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Live Signal Stream</div>
+            <div id="signalStream" class="text-[11px] space-y-1 max-h-20 overflow-y-auto font-mono">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Order Ticket & Market Depth -->
+    <section class="lg:col-span-3 flex flex-col gap-2.5">
+      <!-- Order Ticket -->
+      <div class="bg-panel border border-border rounded-xl p-3 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Order Ticket</h2>
+          <span id="ticketSymbol" class="text-xs font-mono font-semibold text-blue-400">HDFCBANK</span>
+        </div>
+
+        <!-- Buy / Sell Switch -->
+        <div class="grid grid-cols-2 gap-1.5 bg-bg p-1 rounded-lg border border-border">
+          <button id="btnSideBuy" class="py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white transition">BUY</button>
+          <button id="btnSideSell" class="py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition">SELL</button>
+        </div>
+
+        <!-- Product & Order Type -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] text-gray-400 mb-1">Product</label>
+            <select id="orderProduct" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+              <option value="MIS">MIS (Intraday 5x)</option>
+              <option value="CNC">CNC (Delivery 1x)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-gray-400 mb-1">Order Type</label>
+            <select id="orderType" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+              <option value="MARKET">Market</option>
+              <option value="LIMIT">Limit</option>
+              <option value="SL">Stop-Loss</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Quantity & Price -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] text-gray-400 mb-1">Quantity</label>
+            <input id="orderQty" type="number" min="1" value="25" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-gray-400 mb-1">Price (₹)</label>
+            <input id="orderPrice" type="number" step="0.05" disabled class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-xs font-mono text-gray-400 focus:outline-none focus:border-blue-500 disabled:opacity-60" />
+          </div>
+        </div>
+
+        <div class="flex gap-1.5">
+          <button data-qty="10" class="qty-preset flex-1 py-1 rounded bg-bg hover:bg-gray-800 border border-border text-[11px] font-mono text-gray-300">+10</button>
+          <button data-qty="25" class="qty-preset flex-1 py-1 rounded bg-bg hover:bg-gray-800 border border-border text-[11px] font-mono text-gray-300">+25</button>
+          <button data-qty="50" class="qty-preset flex-1 py-1 rounded bg-bg hover:bg-gray-800 border border-border text-[11px] font-mono text-gray-300">+50</button>
+          <button data-qty="100" class="qty-preset flex-1 py-1 rounded bg-bg hover:bg-gray-800 border border-border text-[11px] font-mono text-gray-300">+100</button>
+          <button id="autoEquityQtyBtn" type="button" class="flex-1 py-1 rounded bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-400/50 text-[11px] font-semibold text-indigo-200 transition" title="Auto-calculate equity shares from Virtual Cash &amp; Stop-Loss %">Auto Eq</button>
+        </div>
+
+        <div class="bg-bg border border-border rounded-lg p-2.5 space-y-1 text-xs font-mono tabular-nums">
+          <div class="flex justify-between">
+            <span class="text-gray-400 font-sans">Equity Value:</span>
+            <span id="estEquityVal" class="text-blue-300 font-semibold">₹21,150.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-400 font-sans">Est. Margin Req:</span>
+            <span id="estMargin" class="text-white font-semibold">₹4,230.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-400 font-sans">Auto SL / Target:</span>
+            <span id="estAutoLevels" class="text-gray-300">₹833.3 / ₹871.4</span>
+          </div>
+          <div class="border-t border-border/70 pt-1 mt-1 space-y-0.5 text-[11px]">
+            <div class="flex justify-between">
+              <span class="text-gray-500 font-sans">Brokerage:</span>
+              <span id="estBrokerage" class="text-gray-300">₹0.00</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 font-sans">STT + Stamp (Govt):</span>
+              <span id="estGovtTax" class="text-gray-300">₹0.00</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 font-sans">NSE Exch + SEBI + GST:</span>
+              <span id="estExchGst" class="text-gray-300">₹0.00</span>
+            </div>
+            <div class="flex justify-between font-semibold">
+              <span class="text-amber-300 font-sans">Total Taxes &amp; Charges:</span>
+              <span id="estCharges" class="text-amber-300">₹0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="ticketAuthNotice" class="bg-amber-500/10 border border-amber-500/35 rounded-lg px-2.5 py-2 text-[11px] text-amber-200 flex items-center justify-between gap-2">
+          <span>Log in required to execute trades</span>
+          <button type="button" id="ticketLoginLink" class="text-blue-400 hover:text-blue-300 font-semibold underline shrink-0">Log In</button>
+        </div>
+
+        <button id="placeOrderBtn" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wide transition shadow-sm">
+          LOG IN TO TRADE
+        </button>
+      </div>
+
+      <!-- Simulated Level-2 Market Depth -->
+      <div class="bg-panel border border-border rounded-xl p-3 flex-1 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Market Depth (L2 Sim)</h2>
+          <span id="depthImbalanceText" class="text-[11px] font-mono text-emerald-400">56% Bid</span>
+        </div>
+        <div class="w-full h-1.5 bg-bear/50 rounded-full overflow-hidden flex">
+          <div id="depthImbalanceBar" class="h-full bg-bull transition-all duration-300" style="width: 56%"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-[11px] font-mono tabular-nums mt-1">
+          <div>
+            <div class="flex justify-between text-gray-500 pb-1 border-b border-border">
+              <span>BID QTY</span><span>PRICE</span>
+            </div>
+            <div id="bidDepthList" class="divide-y divide-border/40"></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-gray-500 pb-1 border-b border-border">
+              <span>PRICE</span><span>ASK QTY</span>
+            </div>
+            <div id="askDepthList" class="divide-y divide-border/40"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Full-Width Portfolio & Multi-Stock Scanner -->
+    <section id="bottomWorkspaceSection" class="lg:col-span-12 bg-panel border border-border rounded-xl overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-border">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button data-tab="automation" class="bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600/30 to-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:text-white">Automation with tools</button>
+          <button data-tab="positions" class="bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white">Portfolio (<span id="posCount">0</span>)</button>
+          <button data-tab="orders" class="bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white">Open Orders (<span id="openOrderCount">0</span>)</button>
+          <button data-tab="trades" class="bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white">Trade History (<span id="tradeCount">0</span>)</button>
+          <button data-tab="scanner" class="bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white">Technical Scanner</button>
+        </div>
+        <div class="text-xs font-mono text-gray-400 tabular-nums">
+          Realized P&amp;L: <span id="realizedPnlText" class="text-white font-semibold">₹0.00</span>
+        </div>
+      </div>
+
+      <div id="bottomTabContent" class="overflow-x-auto max-h-[420px] overflow-y-auto">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Live NSE Data & Broker Adapter Modal -->
+  <div id="brokerModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-panel border border-border rounded-xl max-w-2xl w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-border pb-3">
+        <div>
+          <h3 class="text-base font-bold text-white">Connect Real NSE Data Feed</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Fetch actual NSE candles &amp; quotes via Twelve Data API or connect a broker relay.</p>
+        </div>
+        <button id="closeBrokerModalBtn" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="flex gap-1.5 bg-bg p-1 rounded-lg border border-border text-xs">
+        <button id="tabTwelveDataBtn" class="flex-1 py-1.5 rounded-md bg-blue-600 text-white font-semibold transition">Twelve Data (Direct Browser)</button>
+        <button id="tabBrokerRelayBtn" class="flex-1 py-1.5 rounded-md text-gray-400 hover:text-white font-semibold transition">Indian Broker Relay</button>
+      </div>
+
+      <!-- Twelve Data Panel -->
+      <div id="twelveDataPanel" class="space-y-3">
+        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs text-emerald-200 leading-relaxed">
+          Works directly in your browser using <span class="font-mono">api.twelvedata.com</span> for NSE (<span class="font-mono">XNSE</span>) equities. Get a free API key at <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener noreferrer" class="underline font-semibold text-emerald-300">twelvedata.com/pricing</a> (8 calls/min free).
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div class="sm:col-span-2">
+            <label class="block text-gray-400 mb-1">Twelve Data API Key</label>
+            <input id="tdApiKeyInput" type="password" placeholder="Paste your Twelve Data API key..." class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">Poll Interval</label>
+            <select id="tdPollInterval" class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-white">
+              <option value="15000">Every 15s</option>
+              <option value="30000" selected>Every 30s</option>
+              <option value="60000">Every 60s</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="tdStatusBox" class="hidden text-xs rounded-lg p-2.5 border"></div>
+
+        <div class="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-border">
+          <button id="tdDisconnectBtn" class="hidden px-3 py-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 text-xs font-semibold transition">Disconnect</button>
+          <div class="flex gap-2 ml-auto">
+            <button id="tdConnectBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">Connect &amp; Fetch Real NSE</button>
+            <button id="closeBrokerModalBtn2" class="px-3.5 py-2 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300 text-xs font-medium">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Broker Relay Panel -->
+      <div id="brokerRelayPanel" class="hidden space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-gray-400 mb-1">Broker SDK</label>
+            <select id="brokerSelect" class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-white">
+              <option value="kite">Zerodha Kite Connect (KiteTicker)</option>
+              <option value="upstox">Upstox API v2 (MarketDataStreamer)</option>
+              <option value="angel">Angel One SmartAPI (WebSocket 2.0)</option>
+              <option value="dhan">DhanHQ Live Market Feed</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">Relay WebSocket URL</label>
+            <input id="relayUrlInput" type="text" value="wss://your-relay-server.example.com/nse-stream" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white" />
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-300">Node.js Broker Relay Snippet</span>
+            <button id="copySnippetBtn" class="text-xs text-blue-400 hover:text-blue-300 font-medium">Copy Code</button>
+          </div>
+          <pre id="brokerSnippet" class="bg-bg border border-border rounded-lg p-3 text-[11px] font-mono text-gray-300 overflow-x-auto leading-relaxed"></pre>
+        </div>
+
+        <div id="relayTestStatus" class="hidden text-xs rounded-lg p-2.5 border"></div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-border">
+          <button id="testRelayBtn" class="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition">Validate Endpoint</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strategy & Monitor Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-panel border border-border rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-border pb-3">
+        <div>
+          <h3 class="text-base font-bold text-white">Monitor &amp; Strategy Settings</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Configure automated sell-signal monitoring for your bought stocks.</p>
+        </div>
+        <button id="closeSettingsBtn" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="bg-bg border border-border rounded-lg p-3 space-y-2.5">
+          <div class="font-semibold text-gray-200">Automated Position Monitor</div>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-gray-300">Monitor bought stocks &amp; alert on Sell signals</span>
+            <input id="setMonitorEnabled" type="checkbox" checked class="accent-emerald-500 w-4 h-4" />
+          </label>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-gray-300">Play audio chime on Sell alert</span>
+            <input id="setSoundEnabled" type="checkbox" checked class="accent-emerald-500 w-4 h-4" />
+          </label>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-gray-300">Auto-Square-Off when Stop-Loss / Target hits</span>
+            <input id="setAutoExit" type="checkbox" class="accent-red-500 w-4 h-4" />
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 mb-1">Stop-Loss (%)</label>
+            <input id="setStopLossPct" type="number" step="0.25" min="0.25" max="25" value="1.5" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white" />
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">Take-Profit Target (%)</label>
+            <input id="setTargetPct" type="number" step="0.25" min="0.5" max="50" value="3.0" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-gray-400 mb-1">Sell Sensitivity</label>
+            <select id="setSellSensitivity" class="w-full bg-bg border border-border rounded-lg px-2.5 py-2 text-white">
+              <option value="2">Aggressive (2+)</option>
+              <option value="3" selected>Balanced (3+)</option>
+              <option value="4">Strict (4+)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">RSI Overbought</label>
+            <input id="setRsiOb" type="number" min="55" max="90" value="70" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white" />
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">Vol Spike (x)</label>
+            <input id="setVolMult" type="number" step="0.1" min="1.0" max="5.0" value="1.4" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white" />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center pt-2 border-t border-border">
+        <button id="resetWalletBtn" class="px-3 py-2 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300 text-xs">Reset ₹10L Margin</button>
+        <div class="flex gap-2">
+          <button id="saveSettingsBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">Save Settings</button>
+          <button id="closeSettingsBtn2" class="px-3.5 py-2 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300 text-xs">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase Cloud Sync & Login Modal -->
+  <div id="cloudSyncModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-panel border border-border rounded-xl max-w-xl w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-border pb-3">
+        <div>
+          <h3 class="text-base font-bold text-white">Account Login</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Log in, create a new user, or reset a forgotten password.</p>
+        </div>
+        <button id="closeCloudSyncBtn" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Supabase Project Credentials (Hidden Behind the Scenes) -->
+      <div class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div>
+          <label class="block text-gray-400 mb-1">Supabase Project URL</label>
+          <input id="sbUrlInput" type="text" placeholder="https://your-project.supabase.co" class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white placeholder-gray-500" />
+        </div>
+        <div>
+          <label class="block text-gray-400 mb-1">Supabase Anon Key</label>
+          <input id="sbKeyInput" type="password" placeholder="eyJhbGciOiJIUzI1NiIs..." class="w-full bg-bg border border-border rounded-lg px-3 py-2 font-mono text-white placeholder-gray-500" />
+        </div>
+      </div>
+
+      <!-- Auth Form (Signed Out View) -->
+      <form id="sbAuthForm" onsubmit="return false;" class="bg-bg border border-border rounded-lg p-3.5 space-y-3 text-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex gap-1 bg-panel p-1 rounded-lg border border-border">
+            <button type="button" id="tabAuthLoginBtn" class="px-3 py-1 rounded-md bg-emerald-600 text-white font-semibold transition">Log In</button>
+            <button type="button" id="tabAuthCreateBtn" class="px-3 py-1 rounded-md text-gray-400 hover:text-white font-semibold transition">Create Account</button>
+            <button type="button" id="tabAuthForgotBtn" class="px-3 py-1 rounded-md text-gray-400 hover:text-white font-semibold transition">Forgot Password</button>
+          </div>
+          <span id="authDbModeBadge" class="hidden text-[11px] font-mono text-gray-400">Mode: Online Supabase DB</span>
+        </div>
+
+        <!-- Login & Create Fields -->
+        <div id="authCredFields" class="space-y-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-gray-400 mb-1">Username</label>
+              <input id="sbEmailInput" type="text" autocomplete="username" placeholder="Enter username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="block text-gray-400 mb-1">Password</label>
+              <div class="relative">
+                <input id="sbPasswordInput" type="password" autocomplete="current-password" placeholder="Password (min 6 chars)" class="w-full bg-panel border border-border rounded-lg px-3 py-2 pr-12 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+                <button type="button" id="togglePwBtn" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 hover:text-white">Show</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Security Questions (Shown on Create Account tab) -->
+          <div id="createSecurityFields" class="hidden bg-panelAlt/60 border border-border rounded-lg p-3 space-y-2">
+            <div class="text-[11px] font-semibold text-blue-300">Security Questions (Required for Password Reset)</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label class="block text-gray-400 mb-1">1. Your city</label>
+                <input id="secCityInput" type="text" placeholder="e.g. Mumbai" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+              </div>
+              <div>
+                <label class="block text-gray-400 mb-1">2. Your favourite fruit</label>
+                <input id="secFruitInput" type="text" placeholder="e.g. Mango" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+              </div>
+              <div>
+                <label class="block text-gray-400 mb-1">3. Your favourite sport person</label>
+                <input id="secSportInput" type="text" placeholder="e.g. Virat Kohli" class="w-full bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+              </div>
+            </div>
+          </div>
+
+          <label class="flex items-center gap-2 text-gray-300 cursor-pointer">
+            <input id="rememberCredsChk" type="checkbox" checked class="accent-emerald-500 w-3.5 h-3.5" />
+            <span>Save username &amp; password on this device</span>
+          </label>
+
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="sbSignInBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition">Log In &amp; Restore</button>
+            <button type="button" id="sbSignUpBtn" class="hidden px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition">Create Account &amp; Save</button>
+          </div>
+        </div>
+
+        <!-- Forgot Password Reset View -->
+        <div id="forgotPwPanel" class="hidden space-y-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-gray-400 mb-1">Username</label>
+              <input id="resetUserInput" type="text" placeholder="Enter your username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500" />
+            </div>
+            <div>
+              <label class="block text-gray-400 mb-1">New Password (min 6 chars)</label>
+              <input id="resetNewPwInput" type="password" placeholder="Enter new password" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label class="block text-gray-400 mb-1">1. Your city</label>
+              <input id="resetCityInput" type="text" placeholder="Answer 1" class="w-full bg-panel border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+            </div>
+            <div>
+              <label class="block text-gray-400 mb-1">2. Your favourite fruit</label>
+              <input id="resetFruitInput" type="text" placeholder="Answer 2" class="w-full bg-panel border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+            </div>
+            <div>
+              <label class="block text-gray-400 mb-1">3. Your favourite sport person</label>
+              <input id="resetSportInput" type="text" placeholder="Answer 3" class="w-full bg-panel border border-border rounded-lg px-2.5 py-1.5 text-white placeholder-gray-500" />
+            </div>
+          </div>
+          <button type="button" id="verifyResetPwBtn" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition">Verify Answers &amp; Reset Password</button>
+        </div>
+      </form>
+
+      <!-- Signed In View -->
+      <div id="sbAccountPanel" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 space-y-2.5 text-xs">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-emerald-300 font-semibold">Cloud Sync Active</div>
+            <div id="sbUserEmailText" class="text-gray-300 font-mono mt-0.5"></div>
+          </div>
+          <span id="sbLastSyncText" class="text-[11px] font-mono text-emerald-400">Synced</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="sbSyncNowBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition">Push to Cloud</button>
+          <button id="sbPullNowBtn" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition">Restore from Cloud</button>
+          <button id="sbSignOutBtn" class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 font-semibold ml-auto transition">Sign Out</button>
+        </div>
+      </div>
+
+      <div id="sbStatusBox" class="hidden text-xs rounded-lg p-2.5 border"></div>
+
+      <!-- One-Time SQL Table Setup (Hidden) -->
+      <div class="hidden bg-bg border border-border rounded-lg p-3 space-y-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-semibold text-gray-300">One-Time Supabase SQL Setup</span>
+          <button id="copySbSqlBtn" class="text-blue-400 hover:text-blue-300 font-medium">Copy SQL</button>
+        </div>
+        <pre id="sbSqlSnippet" class="text-[11px] font-mono text-gray-400 overflow-x-auto leading-relaxed">create table if not exists app_accounts (
+  username text primary key,
+  password_hash text not null,
+  q_city text not null,
+  q_fruit text not null,
+  q_sport text not null,
+  state_json jsonb not null,
+  updated_at timestamptz default now()
+);
+alter table app_accounts enable row level security;
+drop policy if exists "Allow app_accounts access" on app_accounts;
+create policy "Allow app_accounts access" on app_accounts
+  for all to anon, authenticated using (true) with check (true);
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on table public.app_accounts to anon, authenticated;</pre>
+      </div>
+
+      <!-- Clean Footer -->
+      <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-border text-xs">
+        <div class="hidden flex gap-2">
+          <button id="exportJsonBtn" class="px-3 py-1.5 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300 font-medium">Export .json</button>
+          <label class="px-3 py-1.5 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300 font-medium cursor-pointer">
+            Import .json
+            <input id="importJsonInput" type="file" accept=".json" class="hidden" />
+          </label>
+        </div>
+        <button id="closeCloudSyncBtn2" class="px-3.5 py-1.5 rounded-lg bg-bg hover:bg-gray-800 border border-border text-gray-300">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs"></div>
+
+  <script>
+    // --- 1. Grounded NSE Seed Data (Nov 2026 Reference Prices) ---
+    const SEED_SYMBOLS = [
+      { symbol: 'NIFTY 50', tvSymbol: 'NSE:NIFTY', name: 'Nifty 50 Index', sector: 'Index', ltp: 25800.60, open: 25368.00, high: 25808.80, low: 25345.20, prevClose: 25514.30, vol: 42834400, volStep: 12000 },
+      { symbol: 'NIFTY BANK', name: 'Nifty Bank Index', sector: 'Index', ltp: 64635.20, open: 62656.65, high: 64680.80, low: 62600.00, prevClose: 63063.00, vol: 18450000, volStep: 7500 },
+      { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd.', sector: 'Banking', ltp: 846.00, open: 815.50, high: 849.40, low: 814.10, prevClose: 821.80, vol: 14210000, volStep: 4200 },
+      { symbol: 'RELIANCE', name: 'Reliance Industries', sector: 'Energy', ltp: 1377.50, open: 1374.00, high: 1384.20, low: 1369.50, prevClose: 1375.60, vol: 9840000, volStep: 3100 },
+      { symbol: 'TCS', name: 'Tata Consultancy Svcs', sector: 'IT', ltp: 2376.20, open: 2348.00, high: 2385.00, low: 2341.00, prevClose: 2342.70, vol: 4120000, volStep: 1400 },
+      { symbol: 'ICICIBANK', name: 'ICICI Bank Ltd.', sector: 'Banking', ltp: 1640.00, open: 1602.00, high: 1644.50, low: 1599.20, prevClose: 1608.90, vol: 11200000, volStep: 3600 },
+      { symbol: 'AXISBANK', name: 'Axis Bank Ltd.', sector: 'Banking', ltp: 1446.00, open: 1373.00, high: 1450.00, low: 1370.50, prevClose: 1380.80, vol: 12650000, volStep: 3900 },
+      { symbol: 'SBIN', name: 'State Bank of India', sector: 'Banking', ltp: 1165.10, open: 1150.00, high: 1174.90, low: 1144.00, prevClose: 1156.00, vol: 17524838, volStep: 5200 },
+      { symbol: 'INFY', name: 'Infosys Ltd.', sector: 'IT', ltp: 1098.00, open: 1091.50, high: 1104.20, low: 1087.00, prevClose: 1091.90, vol: 6780000, volStep: 2300 },
+      { symbol: 'BHARTIARTL', name: 'Bharti Airtel Ltd.', sector: 'Telecom', ltp: 2161.70, open: 2145.00, high: 2169.00, low: 2138.40, prevClose: 2143.90, vol: 5430000, volStep: 1800 },
+      { symbol: 'MARUTI', name: 'Maruti Suzuki India', sector: 'Auto', ltp: 14011.00, open: 13620.00, high: 14045.00, low: 13590.00, prevClose: 13588.40, vol: 980000, volStep: 350 },
+      { symbol: 'SUNPHARMA', name: 'Sun Pharma Inds.', sector: 'Pharma', ltp: 1884.90, open: 1901.00, high: 1906.50, low: 1879.20, prevClose: 1899.90, vol: 3120000, volStep: 1100 },
+      { symbol: 'KOTAKBANK', name: 'Kotak Mahindra Bank', sector: 'Banking', ltp: 515.80, open: 503.20, high: 518.40, low: 502.10, prevClose: 503.00, vol: 6450000, volStep: 2100 },
+      { symbol: 'LT', name: 'Larsen & Toubro', sector: 'Infra', ltp: 4209.10, open: 4215.00, high: 4232.00, low: 4190.50, prevClose: 4211.20, vol: 2150000, volStep: 780 },
+      { symbol: 'ITC', name: 'ITC Limited', sector: 'FMCG', ltp: 299.10, open: 301.20, high: 302.40, low: 298.00, prevClose: 301.00, vol: 11800000, volStep: 3800 },
+      { symbol: 'BAJFINANCE', name: 'Bajaj Finance Ltd.', sector: 'Finance', ltp: 1122.00, open: 1094.00, high: 1126.50, low: 1091.00, prevClose: 1092.80, vol: 4890000, volStep: 1600 },
+      { symbol: 'TITAN', name: 'Titan Company Ltd.', sector: 'Consumer', ltp: 4620.00, open: 4702.00, high: 4715.00, low: 4605.00, prevClose: 4699.90, vol: 1420000, volStep: 520 },
+      { symbol: 'HINDUNILVR', name: 'Hindustan Unilever', sector: 'FMCG', ltp: 2052.50, open: 2075.00, high: 2081.00, low: 2046.00, prevClose: 2074.30, vol: 1950000, volStep: 680 }
+    ];
+
+    const TF_MINUTES = { '1m': 1, '5m': 5, '15m': 15, '1H': 60 };
+
+    // --- 2. Application State ---
+    const state = {
+      activeSymbol: 'HDFCBANK',
+      chartMode: 'analysis',
+      timeframe: '1m',
+      subChart: 'volume',
+      overlays: { ema9: true, ema21: true, vwap: true, bb: false, pivots: false },
+      watchlistFilter: 'all',
+      searchQuery: '',
+      tickSpeedMs: 1000,
+      tickTimer: null,
+      orderSide: 'BUY',
+      bottomTab: 'automation',
+      availableMargin: 1000000,
+      realizedPnl: 0,
+      totalChargesPaid: 0,
+      positions: [],
+      openOrders: [],
+      trades: [],
+      signalLog: [],
+      instruments: {},
+      hoverIndex: null,
+      vix: 13.85,
+      tdApiKey: '',
+      tdConnected: false,
+      tdTimer: null,
+      tdPollMs: 30000,
+      autoTools: {
+        volume: true,
+        rsi: true,
+        bb: true,
+        ad: true,
+        macd: true,
+        stoch: true
+      },
+      autoSignalFilter: 'all',
+      autoHorizon: '1M',
+      settings: {
+        monitorEnabled: true,
+        soundEnabled: true,
+        autoExit: false,
+        stopLossPct: 1.5,
+        targetPct: 3.0,
+        sellSensitivity: 3,
+        rsiOverbought: 70,
+        volMult: 1.4
+      },
+      activeSellAlert: null,
+      sbClient: null,
+      sbUser: null,
+      sbSyncTimer: null
+    };
+
+    // --- 3. Historical Candle Generator & Technical Indicators ---
+    function generateInitialCandles(seed, count = 80, tfMin = 1) {
+      const candles = [];
+      let price = seed.prevClose;
+      const target = seed.ltp;
+      const driftPerBar = (target - price) / count;
+      const volScale = target * 0.0016 * Math.sqrt(tfMin);
+      const now = Date.now();
+
+      for (let i = 0; i < count; i++) {
+        const time = now - (count - i) * tfMin * 60000;
+        const open = price;
+        const shock = (Math.random() - 0.48) * volScale;
+        let close = open + driftPerBar + shock;
+        if (i === count - 1) close = target;
+        const wickUp = Math.random() * volScale * 0.65;
+        const wickDown = Math.random() * volScale * 0.65;
+        const high = Math.max(open, close) + wickUp;
+        const low = Math.min(open, close) - wickDown;
+        const volume = Math.round(seed.volStep * (0.6 + Math.random() * 1.1) * Math.sqrt(tfMin));
+        candles.push({ time, open: +open.toFixed(2), high: +high.toFixed(2), low: +low.toFixed(2), close: +close.toFixed(2), volume });
+        price = close;
+      }
+      return candles;
+    }
+
+    function calcEMA(values, period) {
+      if (!values.length) return [];
+      const k = 2 / (period + 1);
+      const out = [values[0]];
+      for (let i = 1; i < values.length; i++) {
+        out.push(values[i] * k + out[i - 1] * (1 - k));
+      }
+      return out;
+    }
+
+    function calcRSI(closes, period = 14) {
+      const rsi = new Array(closes.length).fill(50);
+      if (closes.length <= period) return rsi;
+      let gains = 0, losses = 0;
+      for (let i = 1; i <= period; i++) {
+        const diff = closes[i] - closes[i - 1];
+        if (diff >= 0) gains += diff;
+        else losses -= diff;
+      }
+      let avgGain = gains / period;
+      let avgLoss = losses / period;
+      rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+
+      for (let i = period + 1; i < closes.length; i++) {
+        const diff = closes[i] - closes[i - 1];
+        const g = diff > 0 ? diff : 0;
+        const l = diff < 0 ? -diff : 0;
+        avgGain = (avgGain * (period - 1) + g) / period;
+        avgLoss = (avgLoss * (period - 1) + l) / period;
+        rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+      }
+      return rsi;
+    }
+
+    function calcMACD(closes) {
+      const ema12 = calcEMA(closes, 12);
+      const ema26 = calcEMA(closes, 26);
+      const macdLine = closes.map((_, i) => ema12[i] - ema26[i]);
+      const signalLine = calcEMA(macdLine, 9);
+      const hist = macdLine.map((v, i) => v - signalLine[i]);
+      return { macdLine, signalLine, hist };
+    }
+
+    function calcVWAP(candles) {
+      let cumPV = 0, cumV = 0;
+      return candles.map(c => {
+        const tp = (c.high + c.low + c.close) / 3;
+        cumPV += tp * c.volume;
+        cumV += c.volume;
+        return cumV > 0 ? cumPV / cumV : c.close;
+      });
+    }
+
+    function calcBB(closes, period = 20, mult = 2) {
+      const upper = [], middle = [], lower = [];
+      for (let i = 0; i < closes.length; i++) {
+        const start = Math.max(0, i - period + 1);
+        const slice = closes.slice(start, i + 1);
+        const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+        const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / slice.length;
+        const sd = Math.sqrt(variance);
+        middle.push(mean);
+        upper.push(mean + mult * sd);
+        lower.push(mean - mult * sd);
+      }
+      return { upper, middle, lower };
+    }
+
+    function calcADLine(candles) {
+      let ad = 0;
+      return candles.map(c => {
+        const range = c.high - c.low;
+        const clv = range > 0 ? ((c.close - c.low) - (c.high - c.close)) / range : 0;
+        ad += clv * c.volume;
+        return ad;
+      });
+    }
+
+    function calcStochastic(candles, kPeriod = 14, dPeriod = 3) {
+      const kArr = candles.map((c, i) => {
+        const start = Math.max(0, i - kPeriod + 1);
+        const slice = candles.slice(start, i + 1);
+        const hh = Math.max(...slice.map(x => x.high));
+        const ll = Math.min(...slice.map(x => x.low));
+        return hh !== ll ? ((c.close - ll) / (hh - ll)) * 100 : 50;
+      });
+      const dArr = kArr.map((_, i) => {
+        const start = Math.max(0, i - dPeriod + 1);
+        const slice = kArr.slice(start, i + 1);
+        return slice.reduce((a, b) => a + b, 0) / slice.length;
+      });
+      return { kArr, dArr };
+    }
+
+    function calcATR(candles, period = 14) {
+      if (candles.length < 2) return 0;
+      const trs = [];
+      for (let i = 1; i < candles.length; i++) {
+        const c = candles[i], prev = candles[i - 1];
+        trs.push(Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close)));
+      }
+      const slice = trs.slice(-period);
+      return slice.reduce((a, b) => a + b, 0) / (slice.length || 1);
+    }
+
+    function analyzeHorizonCandles(candles) {
+      const closes = candles.map(c => c.close);
+      const len = candles.length;
+      const rsiPeriod = len >= 120 ? 21 : 14;
+      const bbPeriod = len >= 120 ? 50 : len >= 50 ? 30 : 20;
+      const stochPeriod = len >= 120 ? 21 : 14;
+
+      const rsiArr = calcRSI(closes, rsiPeriod);
+      const macd = calcMACD(closes);
+      const bb = calcBB(closes, bbPeriod, 2);
+      const adArr = calcADLine(candles);
+      const stoch = calcStochastic(candles, stochPeriod, 3);
+
+      const last = len - 1;
+      const price = closes[last];
+      const startPrice = closes[0] || price;
+      const periodRetPct = startPrice > 0 ? ((price - startPrice) / startPrice) * 100 : 0;
+
+      const recentVols = candles.slice(0, last).map(c => c.volume);
+      const avgVol = recentVols.reduce((a, b) => a + b, 0) / (recentVols.length || 1);
+      const last5VolAvg = candles.slice(Math.max(0, len - 5)).reduce((a, b) => a + b.volume, 0) / Math.min(5, len);
+      const volRatio = avgVol > 0 ? last5VolAvg / avgVol : 1;
+
+      const bbUpper = bb.upper[last], bbLower = bb.lower[last];
+      const bbPctB = bbUpper !== bbLower ? (price - bbLower) / (bbUpper - bbLower) : 0.5;
+      const adSlope = adArr[last] - adArr[0];
+
+      return {
+        lastClose: price,
+        lastOpen: candles[0].open,
+        periodRetPct,
+        volRatio,
+        curRsi: rsiArr[last],
+        bbPctB,
+        adSlope,
+        curHist: macd.hist[last],
+        curStochK: stoch.kArr[last],
+        curStochD: stoch.dArr[last]
+      };
+    }
+
+    function analyzeInstrument(inst) {
+      const candles = inst.candles[state.timeframe];
+      const closes = candles.map(c => c.close);
+      const ema9 = calcEMA(closes, 9);
+      const ema21 = calcEMA(closes, 21);
+      const vwap = calcVWAP(candles);
+      const rsiArr = calcRSI(closes, 14);
+      const macd = calcMACD(closes);
+      const bb = calcBB(closes, 20, 2);
+      const adArr = calcADLine(candles);
+      const stoch = calcStochastic(candles, 14, 3);
+      const atr = calcATR(candles, 14);
+
+      const last = candles.length - 1;
+      const price = closes[last];
+      const curEma9 = ema9[last];
+      const curEma21 = ema21[last];
+      const curVwap = vwap[last];
+      const curRsi = rsiArr[last];
+      const curHist = macd.hist[last];
+      const prevHist = macd.hist[Math.max(0, last - 1)];
+
+      const recentVols = candles.slice(-21, -1).map(c => c.volume);
+      const avgVol = recentVols.reduce((a, b) => a + b, 0) / (recentVols.length || 1);
+      const volRatio = avgVol > 0 ? candles[last].volume / avgVol : 1;
+
+      const vwapDevPct = curVwap > 0 ? ((price - curVwap) / curVwap) * 100 : 0;
+
+      // Composite Score (-100 to +100)
+      let score = 0;
+      const reasons = [];
+
+      if (vwapDevPct > 0.05) { score += 25; reasons.push(`Above VWAP (+${vwapDevPct.toFixed(2)}%)`); }
+      else if (vwapDevPct < -0.05) { score -= 25; reasons.push(`Below VWAP (${vwapDevPct.toFixed(2)}%)`); }
+
+      if (curEma9 > curEma21) { score += 25; reasons.push('EMA 9 > EMA 21'); }
+      else { score -= 25; reasons.push('EMA 9 < EMA 21'); }
+
+      if (curRsi >= 55 && curRsi <= 72) { score += 20; reasons.push(`RSI ${curRsi.toFixed(1)} momentum`); }
+      else if (curRsi < 32) { score += 15; reasons.push(`RSI ${curRsi.toFixed(1)} oversold bounce`); }
+      else if (curRsi > 75) { score -= 15; reasons.push(`RSI ${curRsi.toFixed(1)} overbought`); }
+      else if (curRsi <= 45) { score -= 20; reasons.push(`RSI ${curRsi.toFixed(1)} weak`); }
+
+      if (curHist > 0 && curHist >= prevHist) { score += 20; reasons.push('MACD expanding'); }
+      else if (curHist < 0 && curHist <= prevHist) { score -= 20; reasons.push('MACD bearish'); }
+
+      if (volRatio >= 1.4) {
+        const dir = candles[last].close >= candles[last].open ? 10 : -10;
+        score += dir;
+        reasons.push(`Vol ${volRatio.toFixed(2)}x spike`);
+      }
+
+      score = Math.max(-100, Math.min(100, score));
+      let signal = 'NEUTRAL';
+      if (score >= 45) signal = 'STRONG BUY';
+      else if (score >= 15) signal = 'BUY';
+      else if (score <= -45) signal = 'STRONG SELL';
+      else if (score <= -15) signal = 'SELL';
+
+      const p = (inst.high + inst.low + inst.ltp) / 3;
+      const pivots = {
+        s2: p - (inst.high - inst.low),
+        s1: 2 * p - inst.high,
+        p,
+        r1: 2 * p - inst.low,
+        r2: p + (inst.high - inst.low)
+      };
+
+      const bbUpper = bb.upper[last], bbLower = bb.lower[last];
+      const bbPctB = bbUpper !== bbLower ? (price - bbLower) / (bbUpper - bbLower) : 0.5;
+      const adSlope = adArr[last] - adArr[Math.max(0, last - 5)];
+      const curStochK = stoch.kArr[last];
+      const curStochD = stoch.dArr[last];
+
+      inst.analysis = {
+        ema9, ema21, vwap, rsiArr, macd, bb, adArr, stoch, atr,
+        curEma9, curEma21, curVwap, curRsi, curHist,
+        bbPctB, adSlope, curStochK, curStochD,
+        vwapDevPct, volRatio, score, signal, reasons, pivots
+      };
+    }
+
+    function initInstruments() {
+      SEED_SYMBOLS.forEach(s => {
+        const candles = {};
+        Object.keys(TF_MINUTES).forEach(tf => {
+          candles[tf] = generateInitialCandles(s, 80, TF_MINUTES[tf]);
+        });
+        const dailyCandles = generateInitialCandles({ ...s, prevClose: +(s.ltp * (0.86 + Math.random() * 0.14)).toFixed(2) }, 252, 1440);
+        state.instruments[s.symbol] = {
+          ...s,
+          flash: '',
+          candles,
+          dailyCandles,
+          analysis: null
+        };
+        analyzeInstrument(state.instruments[s.symbol]);
+      });
+      pushSignalLog('HDFCBANK', 'Price holding above VWAP with bullish EMA 9/21 alignment', 'bull');
+      pushSignalLog('AXISBANK', 'Strong banking momentum (+4.72%); RSI approaching overbought', 'bull');
+    }
+
+    // --- 4. Real-Time Tick Engine ---
+    function pushSignalLog(symbol, message, type = 'neutral') {
+      const time = new Date().toLocaleTimeString('en-IN', { hour12: false });
+      state.signalLog.unshift({ time, symbol, message, type });
+      if (state.signalLog.length > 25) state.signalLog.pop();
+    }
+
+    function stepMarketTick() {
+      state.vix = +(Math.max(10.5, Math.min(22.0, state.vix + (Math.random() - 0.5) * 0.08))).toFixed(2);
+
+      Object.values(state.instruments).forEach(inst => {
+        const prevSignal = inst.analysis ? inst.analysis.signal : 'NEUTRAL';
+        const prevLtp = inst.ltp;
+        const stepStd = inst.ltp * 0.00065;
+        const delta = (Math.random() - 0.492) * stepStd;
+        const newLtp = Math.max(1, +(inst.ltp + delta).toFixed(2));
+
+        inst.ltp = newLtp;
+        inst.high = Math.max(inst.high, newLtp);
+        inst.low = Math.min(inst.low, newLtp);
+        const addVol = Math.round(inst.volStep * (0.04 + Math.random() * 0.12));
+        inst.vol += addVol;
+        inst.flash = newLtp > prevLtp ? 'flash-up' : newLtp < prevLtp ? 'flash-down' : '';
+
+        Object.keys(TF_MINUTES).forEach(tf => {
+          const arr = inst.candles[tf];
+          const last = arr[arr.length - 1];
+          last.close = newLtp;
+          last.high = Math.max(last.high, newLtp);
+          last.low = Math.min(last.low, newLtp);
+          last.volume += addVol;
+
+          const tfMs = TF_MINUTES[tf] * 60000;
+          if (Date.now() - last.time >= tfMs) {
+            arr.push({
+              time: Date.now(),
+              open: newLtp,
+              high: newLtp,
+              low: newLtp,
+              close: newLtp,
+              volume: Math.round(addVol * 2)
+            });
+            if (arr.length > 100) arr.shift();
+          }
+        });
+
+        analyzeInstrument(inst);
+
+        if (inst.analysis.signal !== prevSignal && Math.random() < 0.45) {
+          const t = inst.analysis.score >= 15 ? 'bull' : inst.analysis.score <= -15 ? 'bear' : 'neutral';
+          pushSignalLog(inst.symbol, `Signal shifted ${prevSignal} → ${inst.analysis.signal} (RSI ${inst.analysis.curRsi.toFixed(1)})`, t);
+        }
+      });
+
+      checkPendingOrders();
+        monitorBoughtPositions();
+      document.querySelectorAll('.bottom-tab').forEach(t => {
+        if (t.dataset.tab === state.bottomTab) {
+          t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600 to-emerald-600 text-white border border-emerald-400/50 shadow';
+        } else {
+          t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white';
+        }
+      });
+      renderAll();
+      if (window.refreshOrderTicketAuthUI) window.refreshOrderTicketAuthUI();
+    }
+
+    // --- 5. Order Execution & Paper Portfolio ---
+    function showToast(msg, type = 'info') {
+      const box = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      const colors = type === 'bull'
+        ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
+        : type === 'bear'
+        ? 'bg-red-950/95 border-red-500/50 text-red-200'
+        : 'bg-panel border-blue-500/50 text-gray-100';
+      el.className = `${colors} border rounded-lg px-3.5 py-2.5 text-xs shadow-xl transition-opacity duration-300`;
+      el.textContent = msg;
+      box.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+
+    function calculateNseCharges(turnover, side, product) {
+      if (!turnover || turnover <= 0) {
+        return { brokerage: 0, stt: 0, stampDuty: 0, exchangeTxn: 0, sebiFee: 0, gst: 0, total: 0 };
+      }
+      const brokerage = product === 'MIS' ? Math.min(20, turnover * 0.0003) : 0;
+      const stt = product === 'CNC'
+        ? turnover * 0.001
+        : (side === 'SELL' ? turnover * 0.00025 : 0);
+      const stampDuty = side === 'BUY'
+        ? turnover * (product === 'CNC' ? 0.00015 : 0.00003)
+        : 0;
+      const exchangeTxn = turnover * 0.0000307;
+      const sebiFee = turnover * 0.000001;
+      const gst = (brokerage + exchangeTxn + sebiFee) * 0.18;
+      const total = +(brokerage + stt + stampDuty + exchangeTxn + sebiFee + gst).toFixed(2);
+      return {
+        brokerage: +brokerage.toFixed(2),
+        stt: +stt.toFixed(2),
+        stampDuty: +stampDuty.toFixed(2),
+        exchangeTxn: +exchangeTxn.toFixed(2),
+        sebiFee: +sebiFee.toFixed(2),
+        gst: +gst.toFixed(2),
+        total
+      };
+    }
+
+    function buildCloudPayload() {
+      return {
+        availableMargin: state.availableMargin,
+        realizedPnl: state.realizedPnl,
+        totalChargesPaid: state.totalChargesPaid,
+        positions: state.positions,
+        openOrders: state.openOrders,
+        trades: state.trades.slice(0, 100),
+        settings: state.settings,
+        autoTools: state.autoTools,
+        autoSignalFilter: state.autoSignalFilter,
+        autoHorizon: state.autoHorizon,
+        tdApiKey: state.tdApiKey
+      };
+    }
+
+    function applyRestoredPayload(payload) {
+      if (!payload || typeof payload !== 'object') return;
+      if (typeof payload.availableMargin === 'number') state.availableMargin = payload.availableMargin;
+      if (typeof payload.realizedPnl === 'number') state.realizedPnl = payload.realizedPnl;
+      if (typeof payload.totalChargesPaid === 'number') state.totalChargesPaid = payload.totalChargesPaid;
+      if (Array.isArray(payload.positions)) state.positions = payload.positions;
+      if (Array.isArray(payload.openOrders)) state.openOrders = payload.openOrders;
+      if (Array.isArray(payload.trades)) state.trades = payload.trades;
+      if (payload.settings) state.settings = { ...state.settings, ...payload.settings };
+      if (payload.autoTools) state.autoTools = { ...state.autoTools, ...payload.autoTools };
+      if (payload.autoSignalFilter) state.autoSignalFilter = payload.autoSignalFilter;
+      if (payload.autoHorizon) state.autoHorizon = payload.autoHorizon;
+      if (payload.tdApiKey) {
+        state.tdApiKey = payload.tdApiKey;
+        const tdInp = document.getElementById('tdApiKeyInput');
+        if (tdInp) tdInp.value = payload.tdApiKey;
+      }
+      try {
+        localStorage.setItem('nse_pulse_wallet', JSON.stringify({
+          availableMargin: state.availableMargin,
+          realizedPnl: state.realizedPnl,
+          positions: state.positions,
+          openOrders: state.openOrders,
+          trades: state.trades
+        }));
+        localStorage.setItem('nse_pulse_settings', JSON.stringify(state.settings));
+        localStorage.setItem('nse_pulse_auto_setup', JSON.stringify({
+          autoTools: state.autoTools,
+          autoSignalFilter: state.autoSignalFilter,
+          autoHorizon: state.autoHorizon
+        }));
+      } catch (e) {}
+      monitorBoughtPositions();
+      renderAll();
+    }
+
+    function resetAppToDefaultState() {
+      state.availableMargin = 1000000;
+      state.realizedPnl = 0;
+      state.totalChargesPaid = 0;
+      state.positions = [];
+      state.openOrders = [];
+      state.trades = [];
+      state.activeSellAlert = null;
+      state.settings = {
+        monitorEnabled: true,
+        soundEnabled: true,
+        autoExit: false,
+        stopLossPct: 1.5,
+        targetPct: 3.0,
+        sellSensitivity: 3,
+        rsiOverbought: 70,
+        volMult: 1.4
+      };
+      state.autoTools = { volume: true, rsi: true, bb: true, ad: true, macd: true, stoch: true };
+      state.autoSignalFilter = 'all';
+      state.autoHorizon = '1M';
+      document.getElementById('sellAlertBanner').classList.add('hidden');
+      try {
+        localStorage.removeItem('nse_pulse_wallet');
+        localStorage.removeItem('nse_pulse_settings');
+        localStorage.removeItem('nse_pulse_auto_setup');
+      } catch (e) {}
+      renderAll();
+    }
+
+    async function hashSecret(str) {
+      try {
+        if (window.crypto && window.crypto.subtle) {
+          const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+          return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+      } catch (e) {}
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+      }
+      return 'h_' + (h >>> 0).toString(16);
+    }
+
+    async function pushStateToSupabase(silent = true) {
+      if (!state.sbClient || !state.sbUser) return false;
+      try {
+        const uname = (state.sbUser.username || state.sbUser.id).toLowerCase();
+        const { error } = await state.sbClient
+          .from('app_accounts')
+          .update({ state_json: buildCloudPayload(), updated_at: new Date().toISOString() })
+          .eq('username', uname);
+        if (error) throw error;
+        const lbl = document.getElementById('sbLastSyncText');
+        if (lbl) lbl.textContent = 'Synced ' + new Date().toLocaleTimeString('en-IN', { hour12: false });
+        if (!silent) showToast('Saved portfolio & settings to online database', 'bull');
+        return true;
+      } catch (err) {
+        if (!silent) showToast('Online sync failed: ' + err.message, 'bear');
+        return false;
+      }
+    }
+
+    async function pullStateFromSupabase(silent = false) {
+      if (!state.sbClient || !state.sbUser) return false;
+      try {
+        const uname = (state.sbUser.username || state.sbUser.id).toLowerCase();
+        const { data, error } = await state.sbClient
+          .from('app_accounts')
+          .select('state_json')
+          .eq('username', uname)
+          .maybeSingle();
+        if (error) throw error;
+        if (data && data.state_json) {
+          applyRestoredPayload(data.state_json);
+          if (!silent) showToast('Restored portfolio & virtual cash from online database', 'bull');
+        }
+        return true;
+      } catch (err) {
+        if (!silent) showToast('Online restore failed: ' + err.message, 'bear');
+        return false;
+      }
+    }
+
+    function saveLocalUserSnapshot() {
+      if (!state.sbUser || !state.sbUser.isLocal) return;
+      try {
+        const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+        const key = state.sbUser.username.toLowerCase();
+        if (users[key]) {
+          users[key].payload = buildCloudPayload();
+          localStorage.setItem('nse_pulse_users', JSON.stringify(users));
+        }
+      } catch (e) {}
+    }
+
+    function scheduleCloudSync() {
+      if (state.sbUser && state.sbUser.isLocal) {
+        saveLocalUserSnapshot();
+        return;
+      }
+      if (!state.sbClient || !state.sbUser) return;
+      if (state.sbSyncTimer) clearTimeout(state.sbSyncTimer);
+      state.sbSyncTimer = setTimeout(() => pushStateToSupabase(true), 800);
+    }
+
+    function saveWalletState() {
+      try {
+        localStorage.setItem('nse_pulse_wallet', JSON.stringify({
+          availableMargin: state.availableMargin,
+          realizedPnl: state.realizedPnl,
+          positions: state.positions,
+          openOrders: state.openOrders,
+          trades: state.trades.slice(0, 100)
+        }));
+      } catch (e) {}
+      scheduleCloudSync();
+    }
+
+    function executeOrderFill(order, fillPrice) {
+      const leverage = order.product === 'MIS' ? 5 : 1;
+      const existing = state.positions.find(p => p.symbol === order.symbol && p.product === order.product);
+      const signedQty = order.side === 'BUY' ? order.qty : -order.qty;
+
+      const tradeTurnover = fillPrice * order.qty;
+      const feeBreakup = calculateNseCharges(tradeTurnover, order.side, order.product);
+
+      if (!existing) {
+        const marginReq = tradeTurnover / leverage;
+        if (marginReq + feeBreakup.total > state.availableMargin) {
+          showToast(`Insufficient virtual cash for ${order.symbol} (${formatINR(marginReq + feeBreakup.total)} needed incl. charges)`, 'bear');
+          return false;
+        }
+        state.availableMargin -= (marginReq + feeBreakup.total);
+        state.positions.push({
+          symbol: order.symbol,
+          product: order.product,
+          qty: signedQty,
+          avgPrice: fillPrice,
+          marginUsed: marginReq
+        });
+      } else if ((existing.qty > 0 && signedQty < 0) || (existing.qty < 0 && signedQty > 0)) {
+        const closedQty = Math.min(Math.abs(existing.qty), Math.abs(signedQty));
+        const leftoverQty = Math.abs(signedQty) - closedQty;
+        const extraMarginNeeded = (fillPrice * leftoverQty) / leverage;
+
+        const pnlPerShare = existing.qty > 0 ? (fillPrice - existing.avgPrice) : (existing.avgPrice - fillPrice);
+        const realized = pnlPerShare * closedQty;
+        const releasedMargin = existing.marginUsed * (closedQty / Math.abs(existing.qty));
+
+        if (extraMarginNeeded > state.availableMargin + releasedMargin + realized) {
+          showToast(`Insufficient virtual cash to reverse position (${formatINR(extraMarginNeeded)} needed)`, 'bear');
+          return false;
+        }
+
+        state.realizedPnl += realized;
+        state.availableMargin += releasedMargin + realized - extraMarginNeeded - feeBreakup.total;
+        existing.marginUsed = existing.marginUsed - releasedMargin + extraMarginNeeded;
+        existing.qty = existing.qty + signedQty;
+        if (leftoverQty > 0) existing.avgPrice = fillPrice;
+        if (existing.qty === 0) {
+          state.positions = state.positions.filter(p => p !== existing);
+        }
+      } else {
+        const addMargin = (fillPrice * Math.abs(signedQty)) / leverage;
+        if (addMargin + feeBreakup.total > state.availableMargin) {
+          showToast(`Insufficient virtual cash for ${order.symbol} (${formatINR(addMargin + feeBreakup.total)} needed incl. charges)`, 'bear');
+          return false;
+        }
+        state.availableMargin -= (addMargin + feeBreakup.total);
+        existing.marginUsed += addMargin;
+        const newQty = existing.qty + signedQty;
+        existing.avgPrice = ((existing.avgPrice * Math.abs(existing.qty)) + (fillPrice * Math.abs(signedQty))) / Math.abs(newQty);
+        existing.qty = newQty;
+      }
+
+      state.totalChargesPaid = +(state.totalChargesPaid + feeBreakup.total).toFixed(2);
+      state.trades.unshift({
+        id: 'TRD' + Math.floor(100000 + Math.random() * 900000),
+        time: new Date().toLocaleTimeString('en-IN', { hour12: false }),
+        symbol: order.symbol,
+        side: order.side,
+        product: order.product,
+        type: order.type,
+        qty: order.qty,
+        price: fillPrice,
+        charges: feeBreakup.total,
+        feeBreakup
+      });
+
+      showToast(`${order.side} ${order.qty} ${order.symbol} @ ₹${fillPrice.toFixed(2)} (Charges: ₹${feeBreakup.total.toFixed(2)})`, order.side === 'BUY' ? 'bull' : 'bear');
+      saveWalletState();
+      monitorBoughtPositions();
+      renderAll();
+      return true;
+    }
+
+    function hasOpposingPosition(symbol, side) {
+      return state.positions.some(p => p.symbol === symbol && ((p.qty > 0 && side === 'SELL') || (p.qty < 0 && side === 'BUY')));
+    }
+
+    function playAlertChime() {
+      if (!state.settings.soundEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(660, ctx.currentTime);
+        osc.frequency.setValueAtTime(520, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.36);
+      } catch (e) {}
+    }
+
+    function evaluatePositionMonitor(pos) {
+      const inst = state.instruments[pos.symbol];
+      const a = inst.analysis;
+      if (!a || pos.qty <= 0) return { status: 'NEUTRAL', triggers: [] };
+
+      const pnlPct = ((inst.ltp - pos.avgPrice) / pos.avgPrice) * 100;
+      const triggers = [];
+
+      if (pnlPct <= -state.settings.stopLossPct) {
+        triggers.push(`Stop-Loss hit (${pnlPct.toFixed(2)}%)`);
+      }
+      if (pnlPct >= state.settings.targetPct) {
+        triggers.push(`Target reached (+${pnlPct.toFixed(2)}%)`);
+      }
+      if (a.vwapDevPct < -0.1) triggers.push('Below VWAP');
+      if (a.curEma9 < a.curEma21) triggers.push('EMA 9 < 21');
+      if (a.curHist < 0) triggers.push('MACD Bearish');
+      if (a.curRsi >= state.settings.rsiOverbought) triggers.push(`RSI Overbought (${a.curRsi.toFixed(1)})`);
+      if (a.adSlope < 0) triggers.push('Distribution');
+
+      const techBearCount = [
+        a.vwapDevPct < -0.1,
+        a.curEma9 < a.curEma21,
+        a.curHist < 0,
+        a.curRsi >= state.settings.rsiOverbought,
+        a.adSlope < 0
+      ].filter(Boolean).length;
+
+      const isRiskExit = pnlPct <= -state.settings.stopLossPct || pnlPct >= state.settings.targetPct;
+      const isSellSignal = isRiskExit || techBearCount >= state.settings.sellSensitivity;
+
+      return {
+        status: isSellSignal ? 'SELL_SIGNAL' : 'HEALTHY',
+        isRiskExit,
+        pnlPct,
+        triggers
+      };
+    }
+
+    function monitorBoughtPositions() {
+      if (!state.settings.monitorEnabled || !state.positions.length) {
+        document.getElementById('sellAlertBanner').classList.add('hidden');
+        return;
+      }
+
+      let alerted = null;
+      state.positions.slice().forEach(pos => {
+        if (pos.qty <= 0) return;
+        const evalRes = evaluatePositionMonitor(pos);
+        pos.monitorStatus = evalRes.status;
+        pos.monitorTriggers = evalRes.triggers;
+
+        if (evalRes.status === 'SELL_SIGNAL') {
+          if (state.settings.autoExit && evalRes.isRiskExit) {
+            window.squareOffPosition(pos.symbol, pos.product);
+            pushSignalLog(pos.symbol, `Auto-Squared Off: ${evalRes.triggers[0]}`, 'bear');
+            return;
+          }
+          if (!pos.lastAlertKey || pos.lastAlertKey !== evalRes.triggers.slice(0, 2).join('|')) {
+            pos.lastAlertKey = evalRes.triggers.slice(0, 2).join('|');
+            const reason = evalRes.triggers.slice(0, 3).join(' · ');
+            pushSignalLog(pos.symbol, `SELL ALERT on held position: ${reason}`, 'bear');
+            showToast(`SELL SIGNAL on ${pos.symbol}: ${reason}`, 'bear');
+            playAlertChime();
+          }
+          alerted = { pos, evalRes };
+        } else {
+          pos.lastAlertKey = null;
+        }
+      });
+
+      const banner = document.getElementById('sellAlertBanner');
+      if (alerted && (!state.activeSellAlert || !state.activeSellAlert.dismissed || state.activeSellAlert.symbol !== alerted.pos.symbol)) {
+        state.activeSellAlert = { symbol: alerted.pos.symbol, product: alerted.pos.product, dismissed: false };
+        document.getElementById('sellAlertText').textContent =
+          `${alerted.pos.symbol} (${alerted.pos.qty} qty @ ₹${alerted.pos.avgPrice.toFixed(2)}) → ${alerted.evalRes.triggers.slice(0, 3).join(' · ')} (${alerted.evalRes.pnlPct >= 0 ? '+' : ''}${alerted.evalRes.pnlPct.toFixed(2)}%)`;
+        banner.classList.remove('hidden');
+      } else if (!alerted) {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function checkPendingOrders() {
+      const remaining = [];
+      state.openOrders.forEach(ord => {
+        const ltp = state.instruments[ord.symbol].ltp;
+        let triggered = false;
+        if (ord.type === 'LIMIT') {
+          if ((ord.side === 'BUY' && ltp <= ord.price) || (ord.side === 'SELL' && ltp >= ord.price)) triggered = true;
+        } else if (ord.type === 'SL') {
+          if ((ord.side === 'BUY' && ltp >= ord.price) || (ord.side === 'SELL' && ltp <= ord.price)) triggered = true;
+        }
+        if (triggered) {
+          executeOrderFill(ord, ltp);
+        } else {
+          remaining.push(ord);
+        }
+      });
+      state.openOrders = remaining;
+    }
+
+    function placeOrderFromTicket() {
+      if (!state.sbUser) {
+        showToast('Please log in to your account before executing a trade.', 'bear');
+        document.getElementById('cloudSyncModal').classList.remove('hidden');
+        return;
+      }
+      const sym = state.activeSymbol;
+      const inst = state.instruments[sym];
+      const product = document.getElementById('orderProduct').value;
+      const type = document.getElementById('orderType').value;
+      const qty = parseInt(document.getElementById('orderQty').value, 10);
+      const limitPrice = parseFloat(document.getElementById('orderPrice').value);
+
+      if (!qty || qty <= 0) {
+        showToast('Enter a valid quantity greater than 0', 'bear');
+        return;
+      }
+
+      const order = {
+        id: 'ORD' + Math.floor(100000 + Math.random() * 900000),
+        time: new Date().toLocaleTimeString('en-IN', { hour12: false }),
+        symbol: sym,
+        side: state.orderSide,
+        product,
+        type,
+        qty,
+        price: type === 'MARKET' ? inst.ltp : (isNaN(limitPrice) || limitPrice <= 0 ? inst.ltp : limitPrice)
+      };
+
+      if (type === 'MARKET') {
+        if (executeOrderFill(order, inst.ltp)) {
+          state.bottomTab = 'positions';
+          document.querySelectorAll('.bottom-tab').forEach(t => {
+            if (t.dataset.tab === 'automation') {
+              t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600/30 to-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:text-white';
+            } else if (t.dataset.tab === 'positions') {
+              t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+            } else {
+              t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white';
+            }
+          });
+        }
+      } else {
+        state.openOrders.unshift(order);
+        showToast(`${order.type} ${order.side} ${order.qty} ${sym} placed @ ₹${order.price.toFixed(2)}`, 'info');
+      }
+      renderPortfolioAndOrders();
+    }
+
+    window.squareOffPosition = function(symbol, product) {
+      if (!state.sbUser) {
+        showToast('Please log in to your account to close trades.', 'bear');
+        document.getElementById('cloudSyncModal').classList.remove('hidden');
+        return;
+      }
+      const pos = state.positions.find(p => p.symbol === symbol && p.product === product);
+      if (!pos) return;
+      const ltp = state.instruments[symbol].ltp;
+      executeOrderFill({
+        symbol,
+        side: pos.qty > 0 ? 'SELL' : 'BUY',
+        product,
+        type: 'MARKET',
+        qty: Math.abs(pos.qty)
+      }, ltp);
+      renderPortfolioAndOrders();
+    };
+
+    window.cancelOpenOrder = function(id) {
+      state.openOrders = state.openOrders.filter(o => o.id !== id);
+      showToast(`Order ${id} cancelled`, 'info');
+      renderPortfolioAndOrders();
+    };
+
+    // --- 6. Formatting & UI Helpers ---
+    function formatINR(val) {
+      return '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function signalBadgeClass(sig) {
+      if (sig === 'STRONG BUY') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+      if (sig === 'BUY') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+      if (sig === 'STRONG SELL') return 'bg-red-500/20 text-red-300 border-red-500/40';
+      if (sig === 'SELL') return 'bg-red-500/10 text-red-400 border-red-500/30';
+      return 'bg-gray-700/40 text-gray-300 border-gray-600/40';
+    }
+
+    // --- 7. Render Watchlist, Active Header, Analysis, Depth, Portfolio ---
+    function renderHeader() {
+      const nifty = state.instruments['NIFTY 50'];
+      const bank = state.instruments['NIFTY BANK'];
+      const nChg = ((nifty.ltp - nifty.prevClose) / nifty.prevClose) * 100;
+      const bChg = ((bank.ltp - bank.prevClose) / bank.prevClose) * 100;
+
+      document.getElementById('hdrNiftyPrice').textContent = nifty.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const nEl = document.getElementById('hdrNiftyChg');
+      nEl.textContent = `${nChg >= 0 ? '+' : ''}${nChg.toFixed(2)}%`;
+      nEl.className = `font-mono tabular-nums ${nChg >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('hdrBankPrice').textContent = bank.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const bEl = document.getElementById('hdrBankChg');
+      bEl.textContent = `${bChg >= 0 ? '+' : ''}${bChg.toFixed(2)}%`;
+      bEl.className = `font-mono tabular-nums ${bChg >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('hdrVixPrice').textContent = state.vix.toFixed(2);
+
+      let unrealized = 0;
+      state.positions.forEach(p => {
+        const ltp = state.instruments[p.symbol].ltp;
+        unrealized += (ltp - p.avgPrice) * p.qty;
+      });
+      const totalPnl = state.realizedPnl + unrealized - (state.totalChargesPaid || 0);
+
+      const totalUsed = state.positions.reduce((acc, p) => acc + (p.marginUsed || 0), 0);
+      document.getElementById('hdrMargin').textContent = formatINR(state.availableMargin);
+      document.getElementById('hdrUsedMargin').textContent = formatINR(totalUsed);
+      const pnlEl = document.getElementById('hdrPnl');
+      pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatINR(totalPnl)}`;
+      pnlEl.className = `font-mono font-semibold tabular-nums ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+      document.getElementById('realizedPnlText').textContent = `${state.realizedPnl >= 0 ? '+' : ''}${formatINR(state.realizedPnl)} (Charges: -${formatINR(state.totalChargesPaid || 0)})`;
+    }
+
+    function renderWatchlist() {
+      const container = document.getElementById('watchlistContainer');
+      const q = state.searchQuery.trim().toLowerCase();
+
+      const filtered = Object.values(state.instruments).filter(inst => {
+        if (q && !inst.symbol.toLowerCase().includes(q) && !inst.name.toLowerCase().includes(q)) return false;
+        const sig = inst.analysis.signal;
+        if (state.watchlistFilter === 'bullish') return sig.includes('BUY');
+        if (state.watchlistFilter === 'bearish') return sig.includes('SELL');
+        if (state.watchlistFilter === 'vol') return inst.analysis.volRatio >= 1.35;
+        return true;
+      });
+
+      document.getElementById('watchlistCount').textContent = `${filtered.length} symbols`;
+      container.innerHTML = filtered.map(inst => {
+        const chg = inst.ltp - inst.prevClose;
+        const chgPct = (chg / inst.prevClose) * 100;
+        const isUp = chg >= 0;
+        const isSelected = inst.symbol === state.activeSymbol;
+        return `
+          <button onclick="selectSymbol('${inst.symbol}')" class="w-full text-left px-3 py-2.5 flex items-center justify-between hover:bg-panelAlt/80 transition ${isSelected ? 'bg-blue-600/15 border-l-2 border-l-blue-500' : ''} ${inst.flash}">
+            <div class="min-w-0 pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold text-white truncate">${inst.symbol}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded border font-semibold ${signalBadgeClass(inst.analysis.signal)}">${inst.analysis.signal}</span>
+              </div>
+              <div class="text-[11px] text-gray-500 truncate mt-0.5">RSI ${inst.analysis.curRsi.toFixed(1)} · Vol ${inst.analysis.volRatio.toFixed(1)}x</div>
+            </div>
+            <div class="text-right font-mono tabular-nums shrink-0">
+              <div class="text-xs font-semibold text-white">₹${inst.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div class="text-[11px] ${isUp ? 'text-emerald-400' : 'text-red-400'}">${isUp ? '+' : ''}${chgPct.toFixed(2)}%</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function getTvSymbol(sym) {
+      if (sym === 'NIFTY 50') return 'NSE:NIFTY';
+      if (sym === 'NIFTY BANK') return 'NSE:BANKNIFTY';
+      return 'NSE:' + sym;
+    }
+
+    function renderTradingViewChart() {
+      if (state.chartMode !== 'tv') return;
+      const container = document.getElementById('tvChartContainer');
+      const tvSym = getTvSymbol(state.activeSymbol);
+      container.innerHTML = '<div id="tv_widget_inner" class="w-full h-full"></div>';
+      const loadWidget = () => {
+        if (window.TradingView && window.TradingView.widget) {
+          new window.TradingView.widget({
+            autosize: true,
+            symbol: tvSym,
+            interval: state.timeframe === '1H' ? '60' : state.timeframe.replace('m', ''),
+            timezone: 'Asia/Kolkata',
+            theme: 'dark',
+            style: '1',
+            locale: 'en',
+            toolbar_bg: '#0b0f17',
+            enable_publishing: false,
+            hide_side_toolbar: false,
+            allow_symbol_change: true,
+            container_id: 'tv_widget_inner'
+          });
+        }
+      };
+      if (window.TradingView) {
+        loadWidget();
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = loadWidget;
+        script.onerror = () => {
+          container.innerHTML = '<div class="flex items-center justify-center h-full text-xs text-gray-400 p-4 text-center">TradingView external chart could not load in this view. Switch back to Analysis Chart.</div>';
+        };
+        document.head.appendChild(script);
+      }
+    }
+
+    function getTwelveDataSymbol(sym) {
+      if (sym === 'NIFTY 50') return 'NIFTY50:NSE';
+      if (sym === 'NIFTY BANK') return 'NIFTYBANK:NSE';
+      return `${sym}:NSE`;
+    }
+
+    function getTwelveDataInterval(tf) {
+      if (tf === '1m') return '1min';
+      if (tf === '5m') return '5min';
+      if (tf === '15m') return '15min';
+      return '1h';
+    }
+
+    async function fetchTwelveDataAllQuotes(silent = true) {
+      if (!state.tdApiKey) return 0;
+      const equitySyms = Object.values(state.instruments)
+        .filter(i => i.sector !== 'Index')
+        .map(i => i.symbol);
+      const chunks = [];
+      for (let i = 0; i < equitySyms.length; i += 8) {
+        chunks.push(equitySyms.slice(i, i + 8));
+      }
+      let updatedCount = 0;
+      for (const chunk of chunks) {
+        const mapped = chunk.map(sym => getTwelveDataSymbol(sym)).join(',');
+        const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(mapped)}&apikey=${encodeURIComponent(state.tdApiKey)}`;
+        try {
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.status === 'error') continue;
+          const entries = chunk.length === 1 ? { [getTwelveDataSymbol(chunk[0])]: data } : data;
+          chunk.forEach(sym => {
+            const q = entries[getTwelveDataSymbol(sym)];
+            if (!q || q.status === 'error' || !q.close) return;
+            const inst = state.instruments[sym];
+            const newLtp = parseFloat(q.close);
+            if (isNaN(newLtp)) return;
+            inst.ltp = newLtp;
+            if (q.open) inst.open = parseFloat(q.open);
+            if (q.high) inst.high = parseFloat(q.high);
+            if (q.low) inst.low = parseFloat(q.low);
+            if (q.previous_close) inst.prevClose = parseFloat(q.previous_close);
+            if (q.volume) inst.vol = parseInt(q.volume, 10) || inst.vol;
+            const arr = inst.candles[state.timeframe];
+            if (arr && arr.length) {
+              const last = arr[arr.length - 1];
+              last.close = newLtp;
+              last.high = Math.max(last.high, newLtp);
+              last.low = Math.min(last.low, newLtp);
+            }
+            analyzeInstrument(inst);
+            updatedCount++;
+          });
+        } catch (e) {
+          if (!silent) showToast('Twelve Data batch sync error: ' + e.message, 'bear');
+        }
+      }
+      if (updatedCount > 0) {
+        checkPendingOrders();
+        monitorBoughtPositions();
+        renderAll();
+      }
+      return updatedCount;
+    }
+
+    async function fetchTwelveDataForSymbol(sym, silent = false) {
+      if (!state.tdApiKey) return false;
+      const tdSym = getTwelveDataSymbol(sym);
+      const interval = getTwelveDataInterval(state.timeframe);
+      const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${interval}&outputsize=80&apikey=${encodeURIComponent(state.tdApiKey)}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === 'error' || !Array.isArray(data.values) || !data.values.length) {
+          if (!silent) throw new Error(data.message || 'No NSE data returned for ' + tdSym);
+          return false;
+        }
+        const inst = state.instruments[sym];
+        const parsed = data.values.slice().reverse().map(v => ({
+          time: new Date(v.datetime.replace(' ', 'T') + '+05:30').getTime() || Date.now(),
+          open: parseFloat(v.open),
+          high: parseFloat(v.high),
+          low: parseFloat(v.low),
+          close: parseFloat(v.close),
+          volume: parseInt(v.volume, 10) || inst.volStep
+        }));
+        inst.candles[state.timeframe] = parsed;
+        const latest = parsed[parsed.length - 1];
+        const prev = parsed[Math.max(0, parsed.length - 2)];
+        inst.ltp = latest.close;
+        inst.open = parsed[0].open;
+        inst.high = Math.max(...parsed.map(c => c.high));
+        inst.low = Math.min(...parsed.map(c => c.low));
+        inst.prevClose = prev.close;
+        analyzeInstrument(inst);
+        checkPendingOrders();
+        monitorBoughtPositions();
+        renderAll();
+        return true;
+      } catch (err) {
+        if (!silent) {
+          showToast('Twelve Data: ' + err.message, 'bear');
+        }
+        return false;
+      }
+    }
+
+    function updateFeedBadge() {
+      const badge = document.getElementById('feedBadge');
+      const marketOpen = isNseMarketOpen();
+      if (state.tdConnected) {
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>TWELVE DATA NSE · ${marketOpen ? 'LIVE' : 'LAST SESSION'}`;
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+      } else if (state.tickSpeedMs > 0) {
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>SIMULATED NSE LIVE';
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+      } else if (!marketOpen) {
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>NSE CLOSED · LAST SESSION';
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30';
+      } else {
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>FEED PAUSED';
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30';
+      }
+    }
+
+    window.selectSymbol = function(sym) {
+      state.activeSymbol = sym;
+      const orderType = document.getElementById('orderType').value;
+      if (orderType !== 'MARKET') {
+        document.getElementById('orderPrice').value = state.instruments[sym].ltp.toFixed(2);
+      }
+      renderAll();
+      if (state.chartMode === 'tv') renderTradingViewChart();
+      if (state.tdConnected) fetchTwelveDataForSymbol(sym, false);
+    };
+
+    function renderActiveSymbolAndAnalysis() {
+      const inst = state.instruments[state.activeSymbol];
+      const a = inst.analysis;
+      const chg = inst.ltp - inst.prevClose;
+      const chgPct = (chg / inst.prevClose) * 100;
+      const isUp = chg >= 0;
+
+      document.getElementById('activeSymbolTitle').textContent = inst.symbol;
+      document.getElementById('ticketSymbol').textContent = inst.symbol;
+      document.getElementById('activeSectorBadge').textContent = inst.sector;
+
+      const sigPill = document.getElementById('activeSignalPill');
+      sigPill.textContent = a.signal;
+      sigPill.className = `text-[11px] px-2 py-0.5 rounded font-semibold border ${signalBadgeClass(a.signal)}`;
+
+      document.getElementById('activeLtp').textContent = `₹${inst.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const chgEl = document.getElementById('activeChg');
+      chgEl.textContent = `${isUp ? '+' : ''}${chg.toFixed(2)} (${isUp ? '+' : ''}${chgPct.toFixed(2)}%)`;
+      chgEl.className = `text-xs font-mono font-medium tabular-nums ${isUp ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('statOpen').textContent = inst.open.toFixed(2);
+      document.getElementById('statHigh').textContent = inst.high.toFixed(2);
+      document.getElementById('statLow').textContent = inst.low.toFixed(2);
+      document.getElementById('statVol').textContent = (inst.vol / 1e6).toFixed(2) + 'M';
+
+      // Analysis Engine Panel
+      document.getElementById('signalSummaryText').textContent = a.reasons.join(' · ') || 'Consolidating near equilibrium';
+      const scoreBadge = document.getElementById('compositeScoreBadge');
+      scoreBadge.textContent = `${a.score >= 0 ? '+' : ''}${a.score} / 100`;
+      scoreBadge.className = `font-mono font-bold text-sm px-2.5 py-0.5 rounded border ${a.score >= 15 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : a.score <= -15 ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gray-700/40 text-gray-300 border-gray-600/40'}`;
+
+      const pct = Math.round(((a.score + 100) / 200) * 100);
+      const fill = document.getElementById('scoreBarFill');
+      fill.style.width = `${pct}%`;
+      fill.className = `h-full transition-all duration-300 ${a.score >= 15 ? 'bg-emerald-500' : a.score <= -15 ? 'bg-red-500' : 'bg-amber-400'}`;
+
+      // 6 Indicator Cards
+      document.getElementById('indRsiVal').textContent = a.curRsi.toFixed(1);
+      const rsiTag = document.getElementById('indRsiTag');
+      rsiTag.textContent = a.curRsi > 70 ? 'Overbought' : a.curRsi < 30 ? 'Oversold' : a.curRsi >= 50 ? 'Bullish' : 'Bearish';
+      rsiTag.className = `font-semibold ${a.curRsi > 70 ? 'text-amber-400' : a.curRsi >= 50 || a.curRsi < 30 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('indMacdVal').textContent = `${a.curHist >= 0 ? '+' : ''}${a.curHist.toFixed(2)}`;
+      const macdTag = document.getElementById('indMacdTag');
+      macdTag.textContent = a.curHist >= 0 ? 'Bullish' : 'Bearish';
+      macdTag.className = `font-semibold ${a.curHist >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('indVwapVal').textContent = `${a.vwapDevPct >= 0 ? '+' : ''}${a.vwapDevPct.toFixed(2)}%`;
+      const vwapTag = document.getElementById('indVwapTag');
+      vwapTag.textContent = a.vwapDevPct >= 0 ? 'Above' : 'Below';
+      vwapTag.className = `font-semibold ${a.vwapDevPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('indEmaVal').textContent = `${a.curEma9.toFixed(1)} / ${a.curEma21.toFixed(1)}`;
+      const emaTag = document.getElementById('indEmaTag');
+      emaTag.textContent = a.curEma9 >= a.curEma21 ? 'Golden' : 'Death';
+      emaTag.className = `font-semibold ${a.curEma9 >= a.curEma21 ? 'text-emerald-400' : 'text-red-400'}`;
+
+      document.getElementById('indVolVal').textContent = `${a.volRatio.toFixed(2)}x avg`;
+      const volTag = document.getElementById('indVolTag');
+      volTag.textContent = a.volRatio >= 1.4 ? 'Spike' : 'Normal';
+      volTag.className = `font-semibold ${a.volRatio >= 1.4 ? 'text-amber-400' : 'text-gray-400'}`;
+
+      document.getElementById('indAtrVal').textContent = `₹${a.atr.toFixed(2)}`;
+
+      // Pivots
+      const pv = a.pivots;
+      document.getElementById('pivotGrid').innerHTML = [
+        ['S2', pv.s2, 'text-red-400'],
+        ['S1', pv.s1, 'text-red-300'],
+        ['PIVOT', pv.p, 'text-blue-400'],
+        ['R1', pv.r1, 'text-emerald-300'],
+        ['R2', pv.r2, 'text-emerald-400']
+      ].map(([lbl, val, cls]) => `
+        <div class="bg-panelAlt rounded p-1 border border-border/70">
+          <div class="text-[10px] text-gray-500">${lbl}</div>
+          <div class="${cls} font-semibold">${val.toFixed(1)}</div>
+        </div>
+      `).join('');
+
+      // Signal Stream
+      document.getElementById('signalStream').innerHTML = state.signalLog.map(item => {
+        const cls = item.type === 'bull' ? 'text-emerald-400' : item.type === 'bear' ? 'text-red-400' : 'text-gray-300';
+        return `<div class="truncate"><span class="text-gray-500">[${item.time}]</span> <span class="font-semibold text-white">${item.symbol}:</span> <span class="${cls}">${item.message}</span></div>`;
+      }).join('');
+
+      // Ticket Margin Estimate
+      const qty = parseInt(document.getElementById('orderQty').value, 10) || 0;
+      const product = document.getElementById('orderProduct').value;
+      const orderType = document.getElementById('orderType').value;
+      const px = orderType === 'MARKET' ? inst.ltp : (parseFloat(document.getElementById('orderPrice').value) || inst.ltp);
+      const lev = product === 'MIS' ? 5 : 1;
+      const eqVal = px * qty;
+      const estM = eqVal / lev;
+      const feeEst = calculateNseCharges(eqVal, state.orderSide, product);
+      const slMult = state.orderSide === 'BUY' ? (1 - state.settings.stopLossPct / 100) : (1 + state.settings.stopLossPct / 100);
+      const tgtMult = state.orderSide === 'BUY' ? (1 + state.settings.targetPct / 100) : (1 - state.settings.targetPct / 100);
+      document.getElementById('estEquityVal').textContent = formatINR(eqVal);
+      document.getElementById('estMargin').textContent = formatINR(estM);
+      document.getElementById('estAutoLevels').textContent = `₹${(px * slMult).toFixed(1)} / ₹${(px * tgtMult).toFixed(1)}`;
+      document.getElementById('estBrokerage').textContent = formatINR(feeEst.brokerage);
+      document.getElementById('estGovtTax').textContent = formatINR(feeEst.stt + feeEst.stampDuty);
+      document.getElementById('estExchGst').textContent = formatINR(feeEst.exchangeTxn + feeEst.sebiFee + feeEst.gst);
+      document.getElementById('estCharges').textContent = formatINR(feeEst.total);
+      if (orderType === 'MARKET') {
+        document.getElementById('orderPrice').value = inst.ltp.toFixed(2);
+      }
+    }
+
+    function renderDepth() {
+      const inst = state.instruments[state.activeSymbol];
+      const ltp = inst.ltp;
+      const tick = ltp > 5000 ? 0.5 : 0.05;
+      const bids = [], asks = [];
+      let totalBid = 0, totalAsk = 0;
+
+      for (let i = 1; i <= 5; i++) {
+        const seedVal = Math.round((ltp * 17 + i * 131) % 700);
+        const bQty = isNseMarketOpen() && (state.tickSpeedMs > 0 || state.tdConnected) ? Math.round(120 + Math.random() * 900) : (180 + seedVal);
+        const aQty = isNseMarketOpen() && (state.tickSpeedMs > 0 || state.tdConnected) ? Math.round(120 + Math.random() * 900) : (210 + ((seedVal * 3) % 680));
+        totalBid += bQty;
+        totalAsk += aQty;
+        bids.push({ price: (ltp - i * tick).toFixed(2), qty: bQty });
+        asks.push({ price: (ltp + i * tick).toFixed(2), qty: aQty });
+      }
+
+      const bidPct = Math.round((totalBid / (totalBid + totalAsk)) * 100);
+      document.getElementById('depthImbalanceText').textContent = `${bidPct}% Bid`;
+      document.getElementById('depthImbalanceBar').style.width = `${bidPct}%`;
+
+      document.getElementById('bidDepthList').innerHTML = bids.map(b => `
+        <div class="flex justify-between py-1 text-emerald-400">
+          <span>${b.qty}</span><span>${b.price}</span>
+        </div>
+      `).join('');
+      document.getElementById('askDepthList').innerHTML = asks.map(a => `
+        <div class="flex justify-between py-1 text-red-400">
+          <span>${a.price}</span><span>${a.qty}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderPortfolioAndOrders() {
+      document.getElementById('posCount').textContent = state.positions.length;
+      document.getElementById('openOrderCount').textContent = state.openOrders.length;
+      document.getElementById('tradeCount').textContent = state.trades.length;
+
+      const wrap = document.getElementById('bottomTabContent');
+      if (state.bottomTab === 'positions') {
+        if (!state.positions.length) {
+          wrap.innerHTML = `<div class="p-6 text-center text-xs text-gray-500">No open positions. Use the Order Ticket on the right to place a simulated NSE trade.</div>`;
+          return;
+        }
+        wrap.innerHTML = `
+          <table class="w-full text-left text-xs font-mono tabular-nums">
+            <thead class="bg-bg text-gray-400 font-sans">
+              <tr>
+                <th class="px-3 py-2">Symbol</th><th class="px-3 py-2">Side</th><th class="px-3 py-2">Qty</th>
+                <th class="px-3 py-2">Avg Price</th><th class="px-3 py-2">LTP</th><th class="px-3 py-2">Equity Value</th><th class="px-3 py-2">Virtual Locked</th><th class="px-3 py-2">Live P&amp;L</th><th class="px-3 py-2">Auto Monitor</th><th class="px-3 py-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border/60">
+              ${state.positions.map(p => {
+                const ltp = state.instruments[p.symbol].ltp;
+                const pnl = (ltp - p.avgPrice) * p.qty;
+                const cls = pnl >= 0 ? 'text-emerald-400' : 'text-red-400';
+                const isLong = p.qty > 0;
+                return `
+                  <tr onclick="selectSymbol('${p.symbol}')" class="cursor-pointer hover:bg-panelAlt/60">
+                    <td class="px-3 py-2 font-sans font-semibold text-white">${p.symbol} <span class="text-[10px] text-gray-500 font-mono">${p.product}</span></td>
+                    <td class="px-3 py-2 font-sans"><span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${isLong ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}">${isLong ? 'LONG (BUY)' : 'SHORT (SELL)'}</span></td>
+                    <td class="px-3 py-2 ${isLong ? 'text-emerald-400' : 'text-red-400'}">${Math.abs(p.qty)}</td>
+                    <td class="px-3 py-2">₹${p.avgPrice.toFixed(2)}</td>
+                    <td class="px-3 py-2">₹${ltp.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-blue-300">${formatINR(Math.abs(p.qty) * ltp)}</td>
+                    <td class="px-3 py-2 text-amber-300">${formatINR(p.marginUsed || 0)}</td>
+                    <td class="px-3 py-2 font-semibold ${cls}">${pnl >= 0 ? '+' : ''}${formatINR(pnl)}</td>
+                    <td class="px-3 py-2 font-sans">${isLong
+                      ? (p.monitorStatus === 'SELL_SIGNAL'
+                        ? `<span class="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-[10px] font-semibold animate-pulse" title="${(p.monitorTriggers || []).join(', ')}">SELL SIGNAL</span>`
+                        : `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold">MONITORING</span>`)
+                      : `<span class="px-2 py-0.5 rounded bg-gray-700/50 text-gray-300 text-[10px] font-semibold">SHORT</span>`}</td>
+                    <td class="px-3 py-2 text-right" onclick="event.stopPropagation()">
+                      <button onclick="squareOffPosition('${p.symbol}', '${p.product}')" class="px-2.5 py-1 rounded bg-red-500/15 hover:bg-red-500/30 text-red-300 border border-red-500/30 font-sans text-[11px] font-semibold">Close Trade</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } else if (state.bottomTab === 'orders') {
+        if (!state.openOrders.length) {
+          wrap.innerHTML = `<div class="p-6 text-center text-xs text-gray-500">No pending Limit or Stop-Loss orders.</div>`;
+          return;
+        }
+        wrap.innerHTML = `
+          <table class="w-full text-left text-xs font-mono tabular-nums">
+            <thead class="bg-bg text-gray-400 font-sans">
+              <tr>
+                <th class="px-3 py-2">Time</th><th class="px-3 py-2">Symbol</th><th class="px-3 py-2">Side</th>
+                <th class="px-3 py-2">Type</th><th class="px-3 py-2">Qty</th><th class="px-3 py-2">Target Price</th><th class="px-3 py-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border/60">
+              ${state.openOrders.map(o => `
+                <tr>
+                  <td class="px-3 py-2 text-gray-400">${o.time}</td>
+                  <td class="px-3 py-2 font-sans font-semibold text-white">${o.symbol}</td>
+                  <td class="px-3 py-2 ${o.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${o.side}</td>
+                  <td class="px-3 py-2">${o.type} · ${o.product}</td>
+                  <td class="px-3 py-2">${o.qty}</td>
+                  <td class="px-3 py-2">₹${o.price.toFixed(2)}</td>
+                  <td class="px-3 py-2 text-right">
+                    <button onclick="cancelOpenOrder('${o.id}')" class="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 font-sans text-[11px]">Cancel</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+      } else if (state.bottomTab === 'trades') {
+        if (!state.trades.length) {
+          wrap.innerHTML = `<div class="p-6 text-center text-xs text-gray-500">No executed trades yet in this session.</div>`;
+          return;
+        }
+        wrap.innerHTML = `
+          <table class="w-full text-left text-xs font-mono tabular-nums">
+            <thead class="bg-bg text-gray-400 font-sans">
+              <tr>
+                <th class="px-3 py-2">Time</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Symbol</th>
+                <th class="px-3 py-2">Side</th><th class="px-3 py-2">Product</th><th class="px-3 py-2">Qty</th><th class="px-3 py-2">Fill Price</th><th class="px-3 py-2">Taxes &amp; Brokerage</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border/60">
+              ${state.trades.map(t => `
+                <tr>
+                  <td class="px-3 py-2 text-gray-400">${t.time}</td>
+                  <td class="px-3 py-2 text-gray-500">${t.id}</td>
+                  <td class="px-3 py-2 font-sans font-semibold text-white">${t.symbol}</td>
+                  <td class="px-3 py-2 ${t.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${t.side}</td>
+                  <td class="px-3 py-2">${t.product}</td>
+                  <td class="px-3 py-2">${t.qty}</td>
+                  <td class="px-3 py-2">₹${t.price.toFixed(2)}</td>
+                  <td class="px-3 py-2 text-amber-300">-₹${(t.charges || 0).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+      } else if (state.bottomTab === 'automation') {
+        const stocks = Object.values(state.instruments).filter(i => i.sector !== 'Index');
+        const horizonDays = state.autoHorizon === '1Y' ? 252 : state.autoHorizon === '3M' ? 63 : 22;
+        const horizonTitle = state.autoHorizon === '1Y' ? '1 Year Data Analysed (252 Trading Days)' : state.autoHorizon === '3M' ? '3 Month Data Analysed (63 Trading Days)' : '1 Month Data Analysed (22 Trading Days)';
+
+        const evaluated = stocks.map(inst => {
+          const slice = inst.dailyCandles.slice(-horizonDays);
+          const a = analyzeHorizonCandles(slice);
+          const votes = [];
+
+          if (state.autoTools.volume) {
+            const vBull = a.volRatio >= 1.15 && a.lastClose >= a.lastOpen;
+            const vBear = a.volRatio >= 1.15 && a.lastClose < a.lastOpen;
+            votes.push({ key: 'vol', label: `${a.volRatio.toFixed(2)}x`, dir: vBull ? 1 : vBear ? -1 : 0 });
+          }
+          if (state.autoTools.rsi) {
+            const rDir = (a.curRsi < 35 || (a.curRsi >= 52 && a.curRsi <= 68)) ? 1 : (a.curRsi > 72 || a.curRsi <= 45) ? -1 : 0;
+            votes.push({ key: 'rsi', label: a.curRsi.toFixed(1), dir: rDir });
+          }
+          if (state.autoTools.bb) {
+            const bDir = a.bbPctB <= 0.25 ? 1 : a.bbPctB >= 0.8 ? -1 : (a.bbPctB > 0.52 ? 1 : -1);
+            const bTxt = a.bbPctB <= 0.2 ? 'Lower' : a.bbPctB >= 0.8 ? 'Upper' : 'Mid';
+            votes.push({ key: 'bb', label: `${bTxt} (${Math.round(a.bbPctB * 100)}%)`, dir: bDir });
+          }
+          if (state.autoTools.ad) {
+            const adDir = a.adSlope > 0 ? 1 : a.adSlope < 0 ? -1 : 0;
+            votes.push({ key: 'ad', label: adDir >= 0 ? 'Accum.' : 'Distrib.', dir: adDir });
+          }
+          if (state.autoTools.macd) {
+            const mDir = a.curHist > 0 ? 1 : a.curHist < 0 ? -1 : 0;
+            votes.push({ key: 'macd', label: `${a.curHist >= 0 ? '+' : ''}${a.curHist.toFixed(2)}`, dir: mDir });
+          }
+          if (state.autoTools.stoch) {
+            const sDir = (a.curStochK < 25 || (a.curStochK > a.curStochD && a.curStochK < 78)) ? 1 : (a.curStochK > 80 || a.curStochK < a.curStochD) ? -1 : 0;
+            votes.push({ key: 'stoch', label: `${a.curStochK.toFixed(0)}/${a.curStochD.toFixed(0)}`, dir: sDir });
+          }
+
+          const bullVotes = votes.filter(v => v.dir === 1).length;
+          const bearVotes = votes.filter(v => v.dir === -1).length;
+          const net = bullVotes - bearVotes;
+          const total = Math.max(1, votes.length);
+
+          let suggestion = 'HOLD';
+          if (net >= Math.max(2, Math.ceil(total * 0.6))) suggestion = 'STRONG BUY';
+          else if (net >= 1) suggestion = 'BUY';
+          else if (net <= -Math.max(2, Math.ceil(total * 0.6))) suggestion = 'STRONG SELL';
+          else if (net <= -1) suggestion = 'SELL';
+
+          return { inst, a, votes, bullVotes, bearVotes, total, suggestion };
+        }).filter(row => {
+          if (state.autoSignalFilter === 'buy') return row.suggestion.includes('BUY');
+          if (state.autoSignalFilter === 'sell') return row.suggestion.includes('SELL');
+          if (state.autoSignalFilter === 'high') return row.bullVotes >= 4 || row.bearVotes >= 4;
+          return true;
+        }).sort((a, b) => Math.abs(b.bullVotes - b.bearVotes) - Math.abs(a.bullVotes - a.bearVotes));
+
+        const toolDefs = [
+          ['volume', 'Volume'],
+          ['rsi', 'RSI (14)'],
+          ['bb', 'Bollinger Band'],
+          ['ad', 'Accum/Dist (A/D)'],
+          ['macd', 'MACD'],
+          ['stoch', 'Stochastic Osc']
+        ];
+
+        const horizons = [
+          ['1M', '1) 1 Month data analysed'],
+          ['3M', '2) 3 Month data analysed'],
+          ['1Y', '3) Year data analysed']
+        ];
+        const buyCount = evaluated.filter(r => r.suggestion.includes('BUY')).length;
+        const sellCount = evaluated.filter(r => r.suggestion.includes('SELL')).length;
+        const holdCount = evaluated.filter(r => r.suggestion === 'HOLD').length;
+
+        wrap.innerHTML = `
+          <div class="p-3 bg-panelAlt/60 border-b border-border flex flex-wrap items-center justify-between gap-2.5">
+            <div class="flex flex-wrap items-center gap-2">
+              ${horizons.map(([hKey, hLabel]) => `
+                <button onclick="setAutoHorizon('${hKey}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${state.autoHorizon === hKey ? 'bg-gradient-to-r from-indigo-600 to-emerald-600 text-white border-emerald-400/60 shadow' : 'bg-bg border-border text-gray-300 hover:text-white'}">
+                  ${hLabel}
+                </button>
+              `).join('')}
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-mono text-emerald-400">${horizonTitle} · <span class="text-emerald-300">${buyCount} Buy</span> / <span class="text-red-300">${sellCount} Sell</span> / <span class="text-gray-300">${holdCount} Hold</span></span>
+              <button onclick="saveAutomationSetup()" class="px-2.5 py-1 rounded-md bg-blue-600/20 hover:bg-blue-600/35 border border-blue-500/40 text-blue-300 text-[11px] font-semibold transition">Save Setup</button>
+            </div>
+          </div>
+          <div class="p-3 bg-bg/70 border-b border-border flex flex-wrap items-center justify-between gap-2.5">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400 mr-1">Active Tools:</span>
+              ${toolDefs.map(([k, lbl]) => `
+                <button onclick="toggleAutoTool('${k}')" class="px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${state.autoTools[k] ? 'bg-indigo-600/25 border-indigo-400/50 text-indigo-200' : 'bg-panel border-border text-gray-500'}">
+                  ${state.autoTools[k] ? '✓ ' : ''}${lbl}
+                </button>
+              `).join('')}
+            </div>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <span class="text-gray-400">Filter:</span>
+              <select onchange="setAutoFilter(this.value)" class="bg-panel border border-border rounded-md px-2 py-1 text-white">
+                <option value="all" ${state.autoSignalFilter === 'all' ? 'selected' : ''}>All NIFTY 50 (${stocks.length})</option>
+                <option value="buy" ${state.autoSignalFilter === 'buy' ? 'selected' : ''}>Buy Signals Only</option>
+                <option value="sell" ${state.autoSignalFilter === 'sell' ? 'selected' : ''}>Sell Signals Only</option>
+                <option value="high" ${state.autoSignalFilter === 'high' ? 'selected' : ''}>High Conviction (4+ Tools)</option>
+              </select>
+            </div>
+          </div>
+          <table class="w-full text-left text-xs font-mono tabular-nums">
+            <thead class="bg-bg text-gray-400 font-sans">
+              <tr>
+                <th class="px-3 py-2">NIFTY 50 Stock</th>
+                <th class="px-3 py-2">LTP (${state.autoHorizon} Ret)</th>
+                ${state.autoTools.volume ? '<th class="px-3 py-2">Volume</th>' : ''}
+                ${state.autoTools.rsi ? '<th class="px-3 py-2">RSI(14)</th>' : ''}
+                ${state.autoTools.bb ? '<th class="px-3 py-2">Bollinger</th>' : ''}
+                ${state.autoTools.ad ? '<th class="px-3 py-2">Accum/Dist</th>' : ''}
+                ${state.autoTools.macd ? '<th class="px-3 py-2">MACD</th>' : ''}
+                ${state.autoTools.stoch ? '<th class="px-3 py-2">Stoch (%K/%D)</th>' : ''}
+                <th class="px-3 py-2">Consensus</th>
+                <th class="px-3 py-2">Suggestion</th>
+                <th class="px-3 py-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border/60">
+              ${evaluated.map(({ inst, a, votes, bullVotes, bearVotes, total, suggestion }) => {
+                const cellMap = {};
+                votes.forEach(v => { cellMap[v.key] = v; });
+                const dirCls = d => d === 1 ? 'text-emerald-400' : d === -1 ? 'text-red-400' : 'text-gray-300';
+                const canTrade = suggestion.includes('BUY') || suggestion.includes('SELL');
+                const tradeSide = suggestion.includes('BUY') ? 'BUY' : 'SELL';
+                return `
+                  <tr onclick="selectSymbol('${inst.symbol}')" class="cursor-pointer hover:bg-panelAlt/70">
+                    <td class="px-3 py-2 font-sans font-semibold text-white">${inst.symbol}</td>
+                    <td class="px-3 py-2">₹${inst.ltp.toFixed(2)} <span class="text-[10px] ${a.periodRetPct >= 0 ? 'text-emerald-400' : 'text-red-400'}">(${a.periodRetPct >= 0 ? '+' : ''}${a.periodRetPct.toFixed(1)}%)</span></td>
+                    ${state.autoTools.volume ? `<td class="px-3 py-2 ${dirCls(cellMap.vol.dir)}">${cellMap.vol.label}</td>` : ''}
+                    ${state.autoTools.rsi ? `<td class="px-3 py-2 ${dirCls(cellMap.rsi.dir)}">${cellMap.rsi.label}</td>` : ''}
+                    ${state.autoTools.bb ? `<td class="px-3 py-2 ${dirCls(cellMap.bb.dir)}">${cellMap.bb.label}</td>` : ''}
+                    ${state.autoTools.ad ? `<td class="px-3 py-2 ${dirCls(cellMap.ad.dir)}">${cellMap.ad.label}</td>` : ''}
+                    ${state.autoTools.macd ? `<td class="px-3 py-2 ${dirCls(cellMap.macd.dir)}">${cellMap.macd.label}</td>` : ''}
+                    ${state.autoTools.stoch ? `<td class="px-3 py-2 ${dirCls(cellMap.stoch.dir)}">${cellMap.stoch.label}</td>` : ''}
+                    <td class="px-3 py-2 text-gray-300">${bullVotes}B / ${bearVotes}S (${total})</td>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded border text-[10px] font-sans font-semibold ${signalBadgeClass(suggestion)}">${suggestion}</span></td>
+                    <td class="px-3 py-2 text-right" onclick="event.stopPropagation()">
+                      ${canTrade
+                        ? `<button onclick="autoPrepareOrder('${inst.symbol}', '${tradeSide}')" class="px-2.5 py-1 rounded font-sans text-[11px] font-semibold ${tradeSide === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}">${tradeSide}</button>`
+                        : `<span class="text-[11px] text-gray-500 font-sans">Wait</span>`}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } else {
+        wrap.innerHTML = `
+          <table class="w-full text-left text-xs font-mono tabular-nums">
+            <thead class="bg-bg text-gray-400 font-sans">
+              <tr>
+                <th class="px-3 py-2">Symbol</th><th class="px-3 py-2">LTP</th><th class="px-3 py-2">Chg %</th>
+                <th class="px-3 py-2">RSI(14)</th><th class="px-3 py-2">VWAP Dev</th><th class="px-3 py-2">Vol Ratio</th>
+                <th class="px-3 py-2">Score</th><th class="px-3 py-2">Signal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border/60">
+              ${Object.values(state.instruments).map(inst => {
+                const a = inst.analysis;
+                const chgPct = ((inst.ltp - inst.prevClose) / inst.prevClose) * 100;
+                return `
+                  <tr onclick="selectSymbol('${inst.symbol}')" class="cursor-pointer hover:bg-panelAlt/70">
+                    <td class="px-3 py-2 font-sans font-semibold text-white">${inst.symbol}</td>
+                    <td class="px-3 py-2">₹${inst.ltp.toFixed(2)}</td>
+                    <td class="px-3 py-2 ${chgPct >= 0 ? 'text-emerald-400' : 'text-red-400'}">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%</td>
+                    <td class="px-3 py-2">${a.curRsi.toFixed(1)}</td>
+                    <td class="px-3 py-2 ${a.vwapDevPct >= 0 ? 'text-emerald-400' : 'text-red-400'}">${a.vwapDevPct >= 0 ? '+' : ''}${a.vwapDevPct.toFixed(2)}%</td>
+                    <td class="px-3 py-2 ${a.volRatio >= 1.4 ? 'text-amber-400 font-semibold' : 'text-gray-300'}">${a.volRatio.toFixed(2)}x</td>
+                    <td class="px-3 py-2">${a.score >= 0 ? '+' : ''}${a.score}</td>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded border text-[10px] font-sans font-semibold ${signalBadgeClass(a.signal)}">${a.signal}</span></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>`;
+      }
+    }
+
+    // --- 8. High-DPI Interactive Canvas Chart ---
+    function drawChart() {
+      const canvas = document.getElementById('marketChart');
+      const rect = canvas.parentElement.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const W = rect.width;
+      const H = rect.height;
+
+      const inst = state.instruments[state.activeSymbol];
+      const candles = inst.candles[state.timeframe];
+      const a = inst.analysis;
+      const n = candles.length;
+
+      const padLeft = 10, padRight = 64, padTop = 14, padBot = 22;
+      const subH = 68;
+      const mainH = H - padTop - padBot - subH - 12;
+      const subTop = padTop + mainH + 12;
+      const plotW = W - padLeft - padRight;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Compute price range
+      let minP = Infinity, maxP = -Infinity;
+      candles.forEach((c, i) => {
+        minP = Math.min(minP, c.low);
+        maxP = Math.max(maxP, c.high);
+        if (state.overlays.bb) {
+          minP = Math.min(minP, a.bb.lower[i]);
+          maxP = Math.max(maxP, a.bb.upper[i]);
+        }
+      });
+      const padP = (maxP - minP) * 0.08 || 1;
+      minP -= padP;
+      maxP += padP;
+
+      const yOf = p => padTop + ((maxP - p) / (maxP - minP)) * mainH;
+      const barW = plotW / n;
+      const xOf = i => padLeft + (i + 0.5) * barW;
+
+      // Grid lines
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1;
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.fillStyle = '#6b7280';
+      for (let g = 0; g <= 4; g++) {
+        const y = padTop + (mainH / 4) * g;
+        const pVal = maxP - ((maxP - minP) / 4) * g;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(W - padRight, y);
+        ctx.stroke();
+        ctx.fillText(pVal.toFixed(1), W - padRight + 6, y + 3);
+      }
+
+      // Pivots
+      if (state.overlays.pivots) {
+        const pv = a.pivots;
+        [['R1', pv.r1, 'rgba(16,185,129,0.45)'], ['P', pv.p, 'rgba(59,130,246,0.55)'], ['S1', pv.s1, 'rgba(239,68,68,0.45)']].forEach(([lbl, val, col]) => {
+          if (val >= minP && val <= maxP) {
+            const y = yOf(val);
+            ctx.save();
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = col;
+            ctx.beginPath();
+            ctx.moveTo(padLeft, y);
+            ctx.lineTo(W - padRight, y);
+            ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = col;
+            ctx.fillText(lbl, padLeft + 4, y - 3);
+          }
+        });
+      }
+
+      // Bollinger Bands
+      if (state.overlays.bb) {
+        drawLine(ctx, a.bb.upper, xOf, yOf, 'rgba(148, 163, 184, 0.45)', 1);
+        drawLine(ctx, a.bb.lower, xOf, yOf, 'rgba(148, 163, 184, 0.45)', 1);
+      }
+
+      // Candlesticks
+      const candleWidth = Math.max(2, barW * 0.62);
+      candles.forEach((c, i) => {
+        const x = xOf(i);
+        const isUp = c.close >= c.open;
+        const color = isUp ? '#10b981' : '#ef4444';
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+
+        ctx.beginPath();
+        ctx.moveTo(x, yOf(c.high));
+        ctx.lineTo(x, yOf(c.low));
+        ctx.stroke();
+
+        const topY = yOf(Math.max(c.open, c.close));
+        const botY = yOf(Math.min(c.open, c.close));
+        ctx.fillRect(x - candleWidth / 2, topY, candleWidth, Math.max(1.5, botY - topY));
+      });
+
+      // Overlays
+      if (state.overlays.ema9) drawLine(ctx, a.ema9, xOf, yOf, '#f59e0b', 1.4);
+      if (state.overlays.ema21) drawLine(ctx, a.ema21, xOf, yOf, '#a855f7', 1.4);
+      if (state.overlays.vwap) drawLine(ctx, a.vwap, xOf, yOf, '#06b6d4', 1.6);
+
+      // Current Price Line
+      const ltpY = yOf(inst.ltp);
+      ctx.save();
+      ctx.setLineDash([2, 2]);
+      ctx.strokeStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.moveTo(padLeft, ltpY);
+      ctx.lineTo(W - padRight, ltpY);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#2563eb';
+      ctx.fillRect(W - padRight + 2, ltpY - 8, 58, 16);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(inst.ltp.toFixed(1), W - padRight + 6, ltpY + 3);
+
+      // Sub-pane divider
+      ctx.strokeStyle = '#1f2937';
+      ctx.beginPath();
+      ctx.moveTo(padLeft, subTop - 6);
+      ctx.lineTo(W - padRight, subTop - 6);
+      ctx.stroke();
+
+      // Sub-pane rendering
+      if (state.subChart === 'volume') {
+        const maxV = Math.max(...candles.map(c => c.volume)) || 1;
+        candles.forEach((c, i) => {
+          const h = (c.volume / maxV) * subH;
+          ctx.fillStyle = c.close >= c.open ? 'rgba(16,185,129,0.55)' : 'rgba(239,68,68,0.55)';
+          ctx.fillRect(xOf(i) - candleWidth / 2, subTop + subH - h, candleWidth, h);
+        });
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillText('VOL', W - padRight + 6, subTop + 12);
+      } else if (state.subChart === 'rsi') {
+        const yRsi = v => subTop + ((100 - v) / 100) * subH;
+        ctx.strokeStyle = 'rgba(239,68,68,0.35)';
+        ctx.beginPath(); ctx.moveTo(padLeft, yRsi(70)); ctx.lineTo(W - padRight, yRsi(70)); ctx.stroke();
+        ctx.strokeStyle = 'rgba(16,185,129,0.35)';
+        ctx.beginPath(); ctx.moveTo(padLeft, yRsi(30)); ctx.lineTo(W - padRight, yRsi(30)); ctx.stroke();
+        drawLine(ctx, a.rsiArr, xOf, yRsi, '#38bdf8', 1.4);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`RSI ${a.curRsi.toFixed(0)}`, W - padRight + 6, subTop + 12);
+      } else {
+        const maxM = Math.max(...a.macd.hist.map(Math.abs), 0.5);
+        const midY = subTop + subH / 2;
+        a.macd.hist.forEach((v, i) => {
+          const h = (v / maxM) * (subH / 2);
+          ctx.fillStyle = v >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)';
+          ctx.fillRect(xOf(i) - candleWidth / 2, v >= 0 ? midY - h : midY, candleWidth, Math.abs(h));
+        });
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillText('MACD', W - padRight + 6, subTop + 12);
+      }
+
+      // Hover Crosshair
+      if (state.hoverIndex !== null && state.hoverIndex >= 0 && state.hoverIndex < n) {
+        const hx = xOf(state.hoverIndex);
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(156,163,175,0.5)';
+        ctx.beginPath();
+        ctx.moveTo(hx, padTop);
+        ctx.lineTo(hx, subTop + subH);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function drawLine(ctx, arr, xOf, yOf, color, width) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      arr.forEach((v, i) => {
+        if (i === 0) ctx.moveTo(xOf(i), yOf(v));
+        else ctx.lineTo(xOf(i), yOf(v));
+      });
+      ctx.stroke();
+    }
+
+    function renderAll() {
+      renderHeader();
+      renderWatchlist();
+      renderActiveSymbolAndAnalysis();
+      renderDepth();
+      renderPortfolioAndOrders();
+      drawChart();
+    }
+
+    // --- 9. Event Listeners & Initialization ---
+    function isNseMarketOpen() {
+      try {
+        const now = new Date();
+        const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const day = ist.getDay();
+        if (day === 0 || day === 6) return false;
+        const mins = ist.getHours() * 60 + ist.getMinutes();
+        return mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function setTickSpeed(ms) {
+      if (state.tickTimer) {
+        clearInterval(state.tickTimer);
+        state.tickTimer = null;
+      }
+      state.tickSpeedMs = ms;
+      if (ms > 0) {
+        state.tickTimer = setInterval(stepMarketTick, ms);
+      }
+      updateFeedBadge();
+    }
+
+    const BROKER_SNIPPETS = {
+      kite: `// Node.js Relay for Zerodha Kite Connect (KiteTicker)
+const { KiteTicker } = require('kiteconnect');
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8080 });
+const ticker = new KiteTicker({ api_key: process.env.KITE_API_KEY, access_token: process.env.KITE_ACCESS_TOKEN });
+
+ticker.connect();
+ticker.on('connect', () => ticker.subscribe([738561, 341249])); // RELIANCE, HDFCBANK
+ticker.on('ticks', (ticks) => {
+  wss.clients.forEach(c => c.readyState === 1 && c.send(JSON.stringify(ticks)));
+});`,
+      upstox: `// Node.js Relay for Upstox API v2
+const UpstoxClient = require('upstox-js-sdk');
+const WebSocket = require('ws');
+// Subscribe to NSE_EQ|INE040A01034 (HDFCBANK) & forward decoded protobuf ticks to ws://localhost:8080`,
+      angel: `// Node.js Relay for Angel One SmartAPI WebSocket 2.0
+const { WebSocketV2 } = require('smartapi-javascript');
+// Authenticate with clientCode + jwtToken + feedToken, subscribe NSE_CM tokens, and broadcast JSON ticks.`,
+      dhan: `// Node.js Relay for DhanHQ Live Market Feed
+// Connect wss://api-feed.dhan.co with clientId & accessToken and relay binary ticks as JSON.`
+    };
+
+    function setupListeners() {
+      // Speed buttons (strictly locked when NSE is closed)
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const spd = parseInt(btn.dataset.speed, 10);
+          if (spd > 0 && !isNseMarketOpen()) {
+            showToast('NSE is closed (Mon–Fri, 9:15 AM – 3:30 PM IST). Stocks stay frozen until market opens.', 'info');
+            return;
+          }
+          document.querySelectorAll('.speed-btn').forEach(b => {
+            b.className = 'speed-btn px-2 py-1 rounded-md text-gray-400 hover:text-white transition';
+          });
+          btn.className = 'speed-btn px-2 py-1 rounded-md bg-blue-600 text-white font-medium transition';
+          setTickSpeed(spd);
+        });
+      });
+
+      // Watchlist search & filters
+      document.getElementById('symbolSearch').addEventListener('input', e => {
+        state.searchQuery = e.target.value;
+        renderWatchlist();
+      });
+
+      document.querySelectorAll('.wl-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.watchlistFilter = btn.dataset.filter;
+          document.querySelectorAll('.wl-filter-btn').forEach(b => {
+            b.className = 'wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-bg text-gray-400 hover:text-white';
+          });
+          btn.className = 'wl-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-blue-600 text-white';
+          renderWatchlist();
+        });
+      });
+
+      // Timeframes
+      document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.timeframe = btn.dataset.tf;
+          document.querySelectorAll('.tf-btn').forEach(b => {
+            b.className = 'tf-btn px-2 py-1 rounded text-gray-400 hover:text-white';
+          });
+          btn.className = 'tf-btn px-2 py-1 rounded bg-blue-600 text-white font-medium';
+          Object.values(state.instruments).forEach(analyzeInstrument);
+          renderAll();
+          if (state.tdConnected) fetchTwelveDataForSymbol(state.activeSymbol, false);
+        });
+      });
+
+      // Overlays
+      document.querySelectorAll('.overlay-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.overlay;
+          state.overlays[key] = !state.overlays[key];
+          btn.classList.toggle('opacity-50', !state.overlays[key]);
+          if (state.overlays[key]) {
+            btn.classList.add('border-blue-500/50', 'text-white');
+          } else {
+            btn.classList.remove('border-blue-500/50', 'text-white');
+          }
+          drawChart();
+        });
+      });
+
+      // Chart Mode (Analysis vs TradingView NSE)
+      document.querySelectorAll('.chartmode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.chartMode = btn.dataset.chartmode;
+          document.querySelectorAll('.chartmode-btn').forEach(b => {
+            b.className = 'chartmode-btn px-2 py-1 rounded text-gray-400 hover:text-white text-[11px] font-medium';
+          });
+          btn.className = 'chartmode-btn px-2 py-1 rounded bg-blue-600 text-white text-[11px] font-medium';
+          const aWrap = document.getElementById('analysisChartWrap');
+          const tvWrap = document.getElementById('tvChartWrap');
+          if (state.chartMode === 'tv') {
+            aWrap.classList.add('hidden');
+            tvWrap.classList.remove('hidden');
+            renderTradingViewChart();
+          } else {
+            tvWrap.classList.add('hidden');
+            aWrap.classList.remove('hidden');
+            drawChart();
+          }
+        });
+      });
+
+      // Sub-chart
+      document.querySelectorAll('.sub-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.subChart = btn.dataset.sub;
+          document.querySelectorAll('.sub-btn').forEach(b => {
+            b.className = 'sub-btn px-2 py-1 rounded text-gray-400 hover:text-white text-[11px]';
+          });
+          btn.className = 'sub-btn px-2 py-1 rounded bg-gray-700 text-white text-[11px]';
+          drawChart();
+        });
+      });
+
+      // Chart hover tooltip
+      const canvas = document.getElementById('marketChart');
+      const tooltip = document.getElementById('chartTooltip');
+      canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const plotW = rect.width - 74;
+        const inst = state.instruments[state.activeSymbol];
+        const candles = inst.candles[state.timeframe];
+        const idx = Math.floor(((x - 10) / plotW) * candles.length);
+        if (idx >= 0 && idx < candles.length) {
+          state.hoverIndex = idx;
+          const c = candles[idx];
+          const a = inst.analysis;
+          const tStr = new Date(c.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+          tooltip.innerHTML = `
+            <div class="text-blue-400 font-semibold">${inst.symbol} · ${tStr}</div>
+            <div>O: ${c.open.toFixed(2)}  H: ${c.high.toFixed(2)}</div>
+            <div>L: ${c.low.toFixed(2)}  C: ${c.close.toFixed(2)}</div>
+            <div>VWAP: ${a.vwap[idx].toFixed(2)} · RSI: ${a.rsiArr[idx].toFixed(1)}</div>
+          `;
+          tooltip.classList.remove('hidden');
+          drawChart();
+        }
+      });
+      canvas.addEventListener('mouseleave', () => {
+        state.hoverIndex = null;
+        tooltip.classList.add('hidden');
+        drawChart();
+      });
+
+      // Order Ticket
+      const btnBuy = document.getElementById('btnSideBuy');
+      const btnSell = document.getElementById('btnSideSell');
+      const placeBtn = document.getElementById('placeOrderBtn');
+      function refreshOrderTicketAuthUI() {
+        const notice = document.getElementById('ticketAuthNotice');
+        if (!state.sbUser) {
+          notice.classList.remove('hidden');
+          placeBtn.className = 'w-full py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-amber-200 border border-amber-500/40 font-semibold text-xs tracking-wide transition shadow-sm';
+          placeBtn.textContent = 'LOG IN TO TRADE';
+        } else {
+          notice.classList.add('hidden');
+          if (state.orderSide === 'BUY') {
+            placeBtn.className = 'w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wide transition shadow-sm';
+            placeBtn.textContent = 'PLACE BUY ORDER';
+          } else {
+            placeBtn.className = 'w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs tracking-wide transition shadow-sm';
+            placeBtn.textContent = 'PLACE SELL ORDER';
+          }
+        }
+      }
+      window.refreshOrderTicketAuthUI = refreshOrderTicketAuthUI;
+
+      function updateSideUI(side) {
+        state.orderSide = side;
+        if (side === 'BUY') {
+          btnBuy.className = 'py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white transition';
+          btnSell.className = 'py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition';
+        } else {
+          btnSell.className = 'py-1.5 rounded-md text-xs font-semibold bg-red-600 text-white transition';
+          btnBuy.className = 'py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition';
+        }
+        refreshOrderTicketAuthUI();
+      }
+      btnBuy.addEventListener('click', () => updateSideUI('BUY'));
+      btnSell.addEventListener('click', () => updateSideUI('SELL'));
+
+      document.getElementById('orderType').addEventListener('change', e => {
+        const priceInput = document.getElementById('orderPrice');
+        if (e.target.value === 'MARKET') {
+          priceInput.disabled = true;
+          priceInput.value = state.instruments[state.activeSymbol].ltp.toFixed(2);
+        } else {
+          priceInput.disabled = false;
+          priceInput.value = state.instruments[state.activeSymbol].ltp.toFixed(2);
+        }
+        renderActiveSymbolAndAnalysis();
+      });
+
+      document.getElementById('orderQty').addEventListener('input', renderActiveSymbolAndAnalysis);
+      document.getElementById('orderProduct').addEventListener('change', renderActiveSymbolAndAnalysis);
+      document.getElementById('orderPrice').addEventListener('input', renderActiveSymbolAndAnalysis);
+
+      document.querySelectorAll('.qty-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const inp = document.getElementById('orderQty');
+          inp.value = (parseInt(inp.value, 10) || 0) + parseInt(btn.dataset.qty, 10);
+          renderActiveSymbolAndAnalysis();
+        });
+      });
+
+      document.getElementById('autoEquityQtyBtn').addEventListener('click', () => {
+        const inst = state.instruments[state.activeSymbol];
+        const px = inst.ltp;
+        const product = document.getElementById('orderProduct').value;
+        const lev = product === 'MIS' ? 5 : 1;
+        const riskCapital = state.availableMargin * 0.02;
+        const riskPerShare = Math.max(0.5, px * (state.settings.stopLossPct / 100));
+        let autoQty = Math.floor(riskCapital / riskPerShare);
+        const maxAffordable = Math.floor((state.availableMargin * 0.95 * lev) / px);
+        autoQty = Math.max(1, Math.min(autoQty, maxAffordable));
+        document.getElementById('orderQty').value = autoQty;
+        renderActiveSymbolAndAnalysis();
+        showToast(`Auto-calculated ${autoQty} equity shares (${formatINR(autoQty * px)} value, 2% risk)`, 'bull');
+      });
+
+      placeBtn.addEventListener('click', placeOrderFromTicket);
+
+      // Highlighted Automation with tools button in header
+      document.getElementById('openAutomationBtn').addEventListener('click', activateAutomationTab);
+
+      // Bottom tabs
+      document.querySelectorAll('.bottom-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          state.bottomTab = tab.dataset.tab;
+          document.querySelectorAll('.bottom-tab').forEach(t => {
+            if (t.dataset.tab === 'automation') {
+              t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600/30 to-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:text-white';
+            } else {
+              t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white';
+            }
+          });
+          if (tab.dataset.tab === 'automation') {
+            tab.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600 to-emerald-600 text-white border border-emerald-400/50 shadow';
+          } else {
+            tab.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+          }
+          renderPortfolioAndOrders();
+        });
+      });
+
+      // Broker Modal
+      const modal = document.getElementById('brokerModal');
+      const snippetEl = document.getElementById('brokerSnippet');
+      const brokerSel = document.getElementById('brokerSelect');
+      snippetEl.textContent = BROKER_SNIPPETS[brokerSel.value];
+      brokerSel.addEventListener('change', () => {
+        snippetEl.textContent = BROKER_SNIPPETS[brokerSel.value];
+      });
+
+      document.getElementById('openBrokerModalBtn').addEventListener('click', () => modal.classList.remove('hidden'));
+      document.getElementById('closeBrokerModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
+      document.getElementById('closeBrokerModalBtn2').addEventListener('click', () => modal.classList.add('hidden'));
+
+      const tabTd = document.getElementById('tabTwelveDataBtn');
+      const tabBr = document.getElementById('tabBrokerRelayBtn');
+      const panelTd = document.getElementById('twelveDataPanel');
+      const panelBr = document.getElementById('brokerRelayPanel');
+      tabTd.addEventListener('click', () => {
+        tabTd.className = 'flex-1 py-1.5 rounded-md bg-blue-600 text-white font-semibold transition';
+        tabBr.className = 'flex-1 py-1.5 rounded-md text-gray-400 hover:text-white font-semibold transition';
+        panelTd.classList.remove('hidden');
+        panelBr.classList.add('hidden');
+      });
+      tabBr.addEventListener('click', () => {
+        tabBr.className = 'flex-1 py-1.5 rounded-md bg-blue-600 text-white font-semibold transition';
+        tabTd.className = 'flex-1 py-1.5 rounded-md text-gray-400 hover:text-white font-semibold transition';
+        panelBr.classList.remove('hidden');
+        panelTd.classList.add('hidden');
+      });
+
+      const tdKeyInput = document.getElementById('tdApiKeyInput');
+      try {
+        const savedKey = localStorage.getItem('nse_pulse_td_key');
+        if (savedKey) tdKeyInput.value = savedKey;
+      } catch (e) {}
+
+      document.getElementById('tdConnectBtn').addEventListener('click', async () => {
+        const key = tdKeyInput.value.trim();
+        const stBox = document.getElementById('tdStatusBox');
+        stBox.classList.remove('hidden');
+        if (!key) {
+          stBox.className = 'text-xs rounded-lg p-2.5 border bg-red-500/15 border-red-500/40 text-red-300';
+          stBox.textContent = 'Please paste a Twelve Data API key first.';
+          return;
+        }
+        stBox.className = 'text-xs rounded-lg p-2.5 border bg-blue-500/15 border-blue-500/40 text-blue-200';
+        stBox.textContent = `Fetching real NSE candles for ${state.activeSymbol}...`;
+        state.tdApiKey = key;
+        try { localStorage.setItem('nse_pulse_td_key', key); } catch (e) {}
+
+        const ok = await fetchTwelveDataForSymbol(state.activeSymbol, false);
+        if (ok) {
+          setTickSpeed(0);
+          state.tdConnected = true;
+          const syncedAll = await fetchTwelveDataAllQuotes(true);
+          state.tdPollMs = parseInt(document.getElementById('tdPollInterval').value, 10) || 30000;
+          if (state.tdTimer) clearInterval(state.tdTimer);
+          state.tdTimer = setInterval(async () => {
+            if (!isNseMarketOpen()) {
+              updateFeedBadge();
+              return;
+            }
+            await fetchTwelveDataForSymbol(state.activeSymbol, true);
+            await fetchTwelveDataAllQuotes(true);
+          }, state.tdPollMs);
+          updateFeedBadge();
+          document.getElementById('tdDisconnectBtn').classList.remove('hidden');
+          stBox.className = 'text-xs rounded-lg p-2.5 border bg-emerald-500/15 border-emerald-500/40 text-emerald-300';
+          stBox.textContent = `Connected! Synced ${syncedAll || 1} NSE stocks across Watchlist, Chart & Automation with tools. Polling every ${state.tdPollMs / 1000}s.`;
+          pushSignalLog(state.activeSymbol, `Synced ${syncedAll || 1} NSE stocks via Twelve Data`, 'bull');
+          renderActiveSymbolAndAnalysis();
+        } else {
+          state.tdConnected = false;
+          updateFeedBadge();
+          stBox.className = 'text-xs rounded-lg p-2.5 border bg-red-500/15 border-red-500/40 text-red-300';
+          stBox.textContent = 'Could not fetch NSE data. Check your Twelve Data API key or plan limits.';
+        }
+      });
+
+      document.getElementById('tdDisconnectBtn').addEventListener('click', () => {
+        state.tdConnected = false;
+        if (state.tdTimer) { clearInterval(state.tdTimer); state.tdTimer = null; }
+        updateFeedBadge();
+        document.getElementById('tdDisconnectBtn').classList.add('hidden');
+        const stBox = document.getElementById('tdStatusBox');
+        stBox.classList.remove('hidden');
+        stBox.className = 'text-xs rounded-lg p-2.5 border bg-gray-700/40 border-gray-600 text-gray-300';
+        stBox.textContent = 'Disconnected from Twelve Data.';
+      });
+
+      document.getElementById('copySnippetBtn').addEventListener('click', () => {
+        const text = snippetEl.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => showToast('Relay code copied to clipboard', 'bull')).catch(() => fallbackCopy(text));
+        } else {
+          fallbackCopy(text);
+        }
+      });
+
+      document.getElementById('testRelayBtn').addEventListener('click', () => {
+        const url = document.getElementById('relayUrlInput').value.trim();
+        const st = document.getElementById('relayTestStatus');
+        st.classList.remove('hidden');
+        if (!url.startsWith('wss://')) {
+          st.className = 'text-xs rounded-lg p-2.5 border bg-red-500/15 border-red-500/40 text-red-300';
+          st.textContent = 'Please enter a valid secure wss:// WebSocket relay URL.';
+        } else {
+          st.className = 'text-xs rounded-lg p-2.5 border bg-amber-500/15 border-amber-500/40 text-amber-200';
+          st.textContent = 'Endpoint format valid. External private WebSocket relays cannot be reached directly from this preview, so the simulated NSE tick engine remains active.';
+        }
+      });
+
+      // Sell Alert Banner Actions
+      document.getElementById('sellAlertSquareOffBtn').addEventListener('click', () => {
+        if (state.activeSellAlert) {
+          window.squareOffPosition(state.activeSellAlert.symbol, state.activeSellAlert.product);
+          document.getElementById('sellAlertBanner').classList.add('hidden');
+        }
+      });
+      document.getElementById('sellAlertDismissBtn').addEventListener('click', () => {
+        if (state.activeSellAlert) state.activeSellAlert.dismissed = true;
+        document.getElementById('sellAlertBanner').classList.add('hidden');
+      });
+
+      // Settings Modal
+      const sModal = document.getElementById('settingsModal');
+      const syncSettingsInputs = () => {
+        document.getElementById('setMonitorEnabled').checked = state.settings.monitorEnabled;
+        document.getElementById('setSoundEnabled').checked = state.settings.soundEnabled;
+        document.getElementById('setAutoExit').checked = state.settings.autoExit;
+        document.getElementById('setStopLossPct').value = state.settings.stopLossPct;
+        document.getElementById('setTargetPct').value = state.settings.targetPct;
+        document.getElementById('setSellSensitivity').value = String(state.settings.sellSensitivity);
+        document.getElementById('setRsiOb').value = state.settings.rsiOverbought;
+        document.getElementById('setVolMult').value = state.settings.volMult;
+      };
+      syncSettingsInputs();
+
+      document.getElementById('openSettingsBtn').addEventListener('click', () => {
+        syncSettingsInputs();
+        sModal.classList.remove('hidden');
+      });
+      document.getElementById('closeSettingsBtn').addEventListener('click', () => sModal.classList.add('hidden'));
+      document.getElementById('closeSettingsBtn2').addEventListener('click', () => sModal.classList.add('hidden'));
+
+      document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+        state.settings.monitorEnabled = document.getElementById('setMonitorEnabled').checked;
+        state.settings.soundEnabled = document.getElementById('setSoundEnabled').checked;
+        state.settings.autoExit = document.getElementById('setAutoExit').checked;
+        state.settings.stopLossPct = Math.max(0.25, parseFloat(document.getElementById('setStopLossPct').value) || 1.5);
+        state.settings.targetPct = Math.max(0.5, parseFloat(document.getElementById('setTargetPct').value) || 3.0);
+        state.settings.sellSensitivity = parseInt(document.getElementById('setSellSensitivity').value, 10) || 3;
+        state.settings.rsiOverbought = Math.max(55, parseInt(document.getElementById('setRsiOb').value, 10) || 70);
+        state.settings.volMult = Math.max(1.0, parseFloat(document.getElementById('setVolMult').value) || 1.4);
+        try { localStorage.setItem('nse_pulse_settings', JSON.stringify(state.settings)); } catch (e) {}
+        monitorBoughtPositions();
+        renderPortfolioAndOrders();
+        sModal.classList.add('hidden');
+        scheduleCloudSync();
+        showToast('Monitor & strategy settings saved', 'bull');
+      });
+
+      document.getElementById('resetWalletBtn').addEventListener('click', () => {
+        state.availableMargin = 1000000;
+        state.realizedPnl = 0;
+        state.positions = [];
+        state.openOrders = [];
+        state.trades = [];
+        document.getElementById('sellAlertBanner').classList.add('hidden');
+        saveWalletState();
+        renderAll();
+        showToast('Paper wallet reset to ₹10,00,000', 'info');
+      });
+
+      // Cloud Sync Modal
+      const cModal = document.getElementById('cloudSyncModal');
+      const sbUrlInp = document.getElementById('sbUrlInput');
+      const sbKeyInp = document.getElementById('sbKeyInput');
+      const sbStatus = document.getElementById('sbStatusBox');
+
+      function showSbStatus(msg, ok = true) {
+        sbStatus.classList.remove('hidden');
+        sbStatus.className = ok
+          ? 'text-xs rounded-lg p-2.5 border bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+          : 'text-xs rounded-lg p-2.5 border bg-red-500/15 border-red-500/40 text-red-300';
+        sbStatus.textContent = msg;
+      }
+
+      function updateCloudAuthUI() {
+        const authForm = document.getElementById('sbAuthForm');
+        const accPanel = document.getElementById('sbAccountPanel');
+        const btnLbl = document.getElementById('cloudSyncBtnLabel');
+        if (state.sbUser) {
+          authForm.classList.add('hidden');
+          accPanel.classList.remove('hidden');
+          const displayUser = state.sbUser.username || state.sbUser.email || state.sbUser.id;
+          document.getElementById('sbUserEmailText').textContent = displayUser;
+          btnLbl.textContent = displayUser.split('@')[0];
+        } else {
+          authForm.classList.remove('hidden');
+          accPanel.classList.add('hidden');
+          btnLbl.textContent = 'Log In';
+        }
+        if (window.refreshOrderTicketAuthUI) window.refreshOrderTicketAuthUI();
+      }
+
+      function saveRememberedCreds(username, password) {
+        try {
+          if (document.getElementById('rememberCredsChk').checked) {
+            localStorage.setItem('nse_pulse_saved_login', JSON.stringify({ username, password }));
+          } else {
+            localStorage.removeItem('nse_pulse_saved_login');
+          }
+        } catch (e) {}
+      }
+
+      function toSupabaseEmail(userOrEmail) {
+        return userOrEmail.includes('@') ? userOrEmail : `${userOrEmail.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@nsepulse.local`;
+      }
+
+      try {
+        const savedLogin = JSON.parse(localStorage.getItem('nse_pulse_saved_login') || 'null');
+        if (savedLogin) {
+          if (savedLogin.username) document.getElementById('sbEmailInput').value = savedLogin.username;
+          if (savedLogin.password) document.getElementById('sbPasswordInput').value = savedLogin.password;
+        }
+        const activeLocal = JSON.parse(localStorage.getItem('nse_pulse_active_local_user') || 'null');
+        if (activeLocal && activeLocal.username) {
+          const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+          const rec = users[activeLocal.username.toLowerCase()];
+          state.sbUser = { id: activeLocal.username, username: activeLocal.username, isLocal: true };
+          if (rec && rec.payload) applyRestoredPayload(rec.payload);
+          updateCloudAuthUI();
+        }
+      } catch (e) {}
+
+      document.getElementById('togglePwBtn').addEventListener('click', () => {
+        const pw = document.getElementById('sbPasswordInput');
+        const btn = document.getElementById('togglePwBtn');
+        if (pw.type === 'password') { pw.type = 'text'; btn.textContent = 'Hide'; }
+        else { pw.type = 'password'; btn.textContent = 'Show'; }
+      });
+
+      function initSupabaseFromInputs() {
+        const url = sbUrlInp.value.trim();
+        const key = sbKeyInp.value.trim();
+        if (!url.startsWith('https://') || !key) {
+          showSbStatus('Enter your valid Supabase Project URL (https://...) and Anon Key.', false);
+          return null;
+        }
+        if (!window.supabase || !window.supabase.createClient) {
+          showSbStatus('Supabase library is still loading. Try again in a moment.', false);
+          return null;
+        }
+        try {
+          localStorage.setItem('nse_pulse_sb_url', url);
+          localStorage.setItem('nse_pulse_sb_key', key);
+        } catch (e) {}
+        state.sbClient = window.supabase.createClient(url, key);
+        return state.sbClient;
+      }
+
+      function refreshDbModeBadge() {
+        const b = document.getElementById('authDbModeBadge');
+        if (!b) return;
+        if (sbUrlInp.value.trim().startsWith('https://') && sbKeyInp.value.trim()) {
+          b.textContent = 'Mode: Online Supabase DB';
+          b.className = 'text-[11px] font-mono text-emerald-400';
+        } else {
+          b.textContent = 'Mode: Local (Add Supabase for Online DB)';
+          b.className = 'text-[11px] font-mono text-gray-400';
+        }
+      }
+      sbUrlInp.addEventListener('input', refreshDbModeBadge);
+      sbKeyInp.addEventListener('input', refreshDbModeBadge);
+
+      const DEFAULT_SB_URL = 'https://ktpscalmaqcahxotucis.supabase.co';
+      const DEFAULT_SB_KEY = 'sb_publishable_fDHhsYGY-xRFW4pIVMn0Jw_SHOg0XcM';
+      try {
+        const savedSbUrl = localStorage.getItem('nse_pulse_sb_url') || DEFAULT_SB_URL;
+        const savedSbKey = localStorage.getItem('nse_pulse_sb_key') || DEFAULT_SB_KEY;
+        sbUrlInp.value = savedSbUrl;
+        sbKeyInp.value = savedSbKey;
+        refreshDbModeBadge();
+        if (savedSbUrl && savedSbKey && window.supabase && window.supabase.createClient) {
+          state.sbClient = window.supabase.createClient(savedSbUrl, savedSbKey);
+          const activeOnline = JSON.parse(localStorage.getItem('nse_pulse_active_online_user') || 'null');
+          if (activeOnline && activeOnline.username) {
+            state.sbUser = { id: activeOnline.username, username: activeOnline.username, isLocal: false };
+            updateCloudAuthUI();
+            pullStateFromSupabase(true);
+          }
+        }
+      } catch (e) {}
+
+      document.getElementById('ticketLoginLink').addEventListener('click', () => {
+        updateCloudAuthUI();
+        cModal.classList.remove('hidden');
+      });
+      document.getElementById('openCloudSyncBtn').addEventListener('click', () => {
+        updateCloudAuthUI();
+        cModal.classList.remove('hidden');
+      });
+      document.getElementById('closeCloudSyncBtn').addEventListener('click', () => cModal.classList.add('hidden'));
+      document.getElementById('closeCloudSyncBtn2').addEventListener('click', () => cModal.classList.add('hidden'));
+
+      const secBox = document.getElementById('createSecurityFields');
+      const authCredFields = document.getElementById('authCredFields');
+      const forgotPwPanel = document.getElementById('forgotPwPanel');
+      const tabAuthLoginBtn = document.getElementById('tabAuthLoginBtn');
+      const tabAuthCreateBtn = document.getElementById('tabAuthCreateBtn');
+      const tabAuthForgotBtn = document.getElementById('tabAuthForgotBtn');
+      const signInBtnEl = document.getElementById('sbSignInBtn');
+      const signUpBtnEl = document.getElementById('sbSignUpBtn');
+
+      function setAuthSubMode(mode) {
+        sbStatus.classList.add('hidden');
+        tabAuthLoginBtn.className = 'px-3 py-1 rounded-md text-gray-400 hover:text-white font-semibold transition';
+        tabAuthCreateBtn.className = 'px-3 py-1 rounded-md text-gray-400 hover:text-white font-semibold transition';
+        tabAuthForgotBtn.className = 'px-3 py-1 rounded-md text-gray-400 hover:text-white font-semibold transition';
+
+        if (mode === 'forgot') {
+          tabAuthForgotBtn.className = 'px-3 py-1 rounded-md bg-amber-600 text-white font-semibold transition';
+          authCredFields.classList.add('hidden');
+          forgotPwPanel.classList.remove('hidden');
+          document.getElementById('resetUserInput').value = document.getElementById('sbEmailInput').value.trim();
+        } else if (mode === 'create') {
+          tabAuthCreateBtn.className = 'px-3 py-1 rounded-md bg-blue-600 text-white font-semibold transition';
+          authCredFields.classList.remove('hidden');
+          forgotPwPanel.classList.add('hidden');
+          secBox.classList.remove('hidden');
+          signInBtnEl.classList.add('hidden');
+          signUpBtnEl.classList.remove('hidden');
+        } else {
+          tabAuthLoginBtn.className = 'px-3 py-1 rounded-md bg-emerald-600 text-white font-semibold transition';
+          authCredFields.classList.remove('hidden');
+          forgotPwPanel.classList.add('hidden');
+          secBox.classList.add('hidden');
+          signInBtnEl.classList.remove('hidden');
+          signUpBtnEl.classList.add('hidden');
+        }
+      }
+
+      tabAuthLoginBtn.addEventListener('click', () => setAuthSubMode('login'));
+      tabAuthCreateBtn.addEventListener('click', () => setAuthSubMode('create'));
+      tabAuthForgotBtn.addEventListener('click', () => setAuthSubMode('forgot'));
+
+      signInBtnEl.addEventListener('click', async () => {
+        const username = document.getElementById('sbEmailInput').value.trim();
+        const password = document.getElementById('sbPasswordInput').value;
+        if (!username || password.length < 6) {
+          showSbStatus('Enter your username and password (at least 6 characters).', false);
+          return;
+        }
+        saveRememberedCreds(username, password);
+        const pwHash = await hashSecret(password);
+        const uname = username.toLowerCase();
+
+        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
+          const client = initSupabaseFromInputs();
+          if (!client) return;
+          try {
+            const { data, error } = await client
+              .from('app_accounts')
+              .select('username, password_hash, state_json')
+              .eq('username', uname)
+              .maybeSingle();
+            if (error) throw error;
+            if (!data || data.password_hash !== pwHash) {
+              showSbStatus('Invalid username or password in online database.', false);
+              return;
+            }
+            state.sbUser = { id: uname, username, isLocal: false };
+            localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username }));
+            if (data.state_json) applyRestoredPayload(data.state_json);
+            updateCloudAuthUI();
+            cModal.classList.add('hidden');
+            showToast(`Logged in as ${username} — data restored!`, 'bull');
+          } catch (err) {
+            showSbStatus('Online login failed: ' + err.message, false);
+          }
+        } else {
+          try {
+            const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+            const rec = users[uname];
+            if (!rec || (rec.password !== password && rec.passwordHash !== pwHash)) {
+              showSbStatus('Invalid username or password. Switch to "Create Account" if new.', false);
+              return;
+            }
+            state.sbUser = { id: uname, username, isLocal: true };
+            localStorage.setItem('nse_pulse_active_local_user', JSON.stringify({ username }));
+            if (rec.payload) applyRestoredPayload(rec.payload);
+            updateCloudAuthUI();
+            cModal.classList.add('hidden');
+            showToast(`Logged in as ${username} — portfolio & settings restored!`, 'bull');
+          } catch (err) {
+            showSbStatus('Could not log in locally.', false);
+          }
+        }
+      });
+
+      signUpBtnEl.addEventListener('click', async () => {
+        const username = document.getElementById('sbEmailInput').value.trim();
+        const password = document.getElementById('sbPasswordInput').value;
+        const city = document.getElementById('secCityInput').value.trim().toLowerCase();
+        const fruit = document.getElementById('secFruitInput').value.trim().toLowerCase();
+        const sport = document.getElementById('secSportInput').value.trim().toLowerCase();
+
+        if (!username || password.length < 6) {
+          showSbStatus('Enter a username and password (at least 6 characters).', false);
+          return;
+        }
+        if (!city || !fruit || !sport) {
+          showSbStatus('Please answer all 3 security questions (city, favourite fruit, favourite sport person).', false);
+          return;
+        }
+        saveRememberedCreds(username, password);
+        const pwHash = await hashSecret(password);
+        const uname = username.toLowerCase();
+
+        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
+          const client = initSupabaseFromInputs();
+          if (!client) return;
+          try {
+            const { data: existing } = await client
+              .from('app_accounts')
+              .select('username')
+              .eq('username', uname)
+              .maybeSingle();
+            if (existing) {
+              showSbStatus('Username already exists in online database. Use Log In.', false);
+              return;
+            }
+            const freshPayload = {
+              ...buildCloudPayload(),
+              availableMargin: 1000000,
+              realizedPnl: 0,
+              totalChargesPaid: 0,
+              positions: [],
+              openOrders: [],
+              trades: []
+            };
+            const { error } = await client.from('app_accounts').insert({
+              username: uname,
+              password_hash: pwHash,
+              q_city: city,
+              q_fruit: fruit,
+              q_sport: sport,
+              state_json: freshPayload,
+              updated_at: new Date().toISOString()
+            });
+            if (error) throw error;
+            state.sbUser = { id: uname, username, isLocal: false };
+            localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username }));
+            applyRestoredPayload(freshPayload);
+            updateCloudAuthUI();
+            showSbStatus(`Account "${username}" saved to online Supabase database!`, true);
+          } catch (err) {
+            showSbStatus('Online signup failed: ' + err.message, false);
+          }
+        } else {
+          try {
+            const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+            if (users[uname]) {
+              showSbStatus('Username already exists. Switch to "Log In".', false);
+              return;
+            }
+            const freshPayload = {
+              ...buildCloudPayload(),
+              availableMargin: 1000000,
+              realizedPnl: 0,
+              totalChargesPaid: 0,
+              positions: [],
+              openOrders: [],
+              trades: []
+            };
+            users[uname] = {
+              username,
+              password,
+              passwordHash: pwHash,
+              security: { city, fruit, sport },
+              payload: freshPayload
+            };
+            localStorage.setItem('nse_pulse_users', JSON.stringify(users));
+            localStorage.setItem('nse_pulse_active_local_user', JSON.stringify({ username }));
+            state.sbUser = { id: uname, username, isLocal: true };
+            applyRestoredPayload(freshPayload);
+            updateCloudAuthUI();
+            showSbStatus(`Account "${username}" created & saved! (Add Supabase URL/Key above for online DB sync)`, true);
+          } catch (err) {
+            showSbStatus('Could not save account.', false);
+          }
+        }
+      });
+
+      document.getElementById('verifyResetPwBtn').addEventListener('click', async () => {
+        const username = document.getElementById('resetUserInput').value.trim();
+        const newPw = document.getElementById('resetNewPwInput').value;
+        const ansCity = document.getElementById('resetCityInput').value.trim().toLowerCase();
+        const ansFruit = document.getElementById('resetFruitInput').value.trim().toLowerCase();
+        const ansSport = document.getElementById('resetSportInput').value.trim().toLowerCase();
+
+        if (!username || newPw.length < 6) {
+          showSbStatus('Enter your username and a new password (min 6 characters).', false);
+          return;
+        }
+        const uname = username.toLowerCase();
+        const newHash = await hashSecret(newPw);
+
+        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
+          const client = initSupabaseFromInputs();
+          if (!client) return;
+          try {
+            const { data, error } = await client
+              .from('app_accounts')
+              .select('q_city, q_fruit, q_sport')
+              .eq('username', uname)
+              .maybeSingle();
+            if (error) throw error;
+            if (!data) {
+              showSbStatus('Username not found in online database.', false);
+              return;
+            }
+            if (data.q_city !== ansCity || data.q_fruit !== ansFruit || data.q_sport !== ansSport) {
+              showSbStatus('Security answers do not match. All 3 answers must be correct.', false);
+              return;
+            }
+            const { error: updErr } = await client
+              .from('app_accounts')
+              .update({ password_hash: newHash, updated_at: new Date().toISOString() })
+              .eq('username', uname);
+            if (updErr) throw updErr;
+            document.getElementById('sbEmailInput').value = username;
+            document.getElementById('sbPasswordInput').value = newPw;
+            saveRememberedCreds(username, newPw);
+            setAuthSubMode('login');
+            showSbStatus(`Password reset in online database for "${username}"! Click Log In & Restore.`, true);
+          } catch (err) {
+            showSbStatus('Online password reset failed: ' + err.message, false);
+          }
+        } else {
+          try {
+            const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+            const rec = users[uname];
+            if (!rec || !rec.security) {
+              showSbStatus('Account not found or no security questions saved.', false);
+              return;
+            }
+            if (rec.security.city !== ansCity || rec.security.fruit !== ansFruit || rec.security.sport !== ansSport) {
+              showSbStatus('Security answers do not match. All 3 answers must be correct.', false);
+              return;
+            }
+            rec.password = newPw;
+            rec.passwordHash = newHash;
+            localStorage.setItem('nse_pulse_users', JSON.stringify(users));
+            document.getElementById('sbEmailInput').value = rec.username;
+            document.getElementById('sbPasswordInput').value = newPw;
+            saveRememberedCreds(rec.username, newPw);
+            setAuthSubMode('login');
+            showSbStatus(`Password reset for "${rec.username}"! Click Log In & Restore.`, true);
+          } catch (err) {
+            showSbStatus('Could not reset password.', false);
+          }
+        }
+      });
+
+      document.getElementById('sbSyncNowBtn').addEventListener('click', () => {
+        if (state.sbUser && state.sbUser.isLocal) {
+          try {
+            const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+            users[state.sbUser.username.toLowerCase()].payload = buildCloudPayload();
+            localStorage.setItem('nse_pulse_users', JSON.stringify(users));
+            showToast('Saved portfolio to account ' + state.sbUser.username, 'bull');
+          } catch (e) {}
+        } else {
+          pushStateToSupabase(false);
+        }
+      });
+      document.getElementById('sbPullNowBtn').addEventListener('click', () => {
+        if (state.sbUser && state.sbUser.isLocal) {
+          try {
+            const users = JSON.parse(localStorage.getItem('nse_pulse_users') || '{}');
+            const rec = users[state.sbUser.username.toLowerCase()];
+            if (rec && rec.payload) {
+              applyRestoredPayload(rec.payload);
+              showToast('Restored portfolio for ' + state.sbUser.username, 'bull');
+            }
+          } catch (e) {}
+        } else {
+          pullStateFromSupabase(false);
+        }
+      });
+      document.getElementById('sbSignOutBtn').addEventListener('click', async () => {
+        if (state.sbUser) {
+          if (state.sbUser.isLocal) saveLocalUserSnapshot();
+          else await pushStateToSupabase(true);
+        }
+        try {
+          localStorage.removeItem('nse_pulse_active_local_user');
+          localStorage.removeItem('nse_pulse_active_online_user');
+        } catch (e) {}
+        state.sbUser = null;
+        resetAppToDefaultState();
+        updateCloudAuthUI();
+        cModal.classList.add('hidden');
+        showToast('Logged out — all your settings & portfolio are saved.', 'info');
+      });
+
+      document.getElementById('copySbSqlBtn').addEventListener('click', () => {
+        const sql = document.getElementById('sbSqlSnippet').textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(sql).then(() => showToast('Supabase SQL copied', 'bull')).catch(() => fallbackCopy(sql));
+        } else {
+          fallbackCopy(sql);
+        }
+      });
+
+      document.getElementById('exportJsonBtn').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(buildCloudPayload(), null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'nse_pulse_backup.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast('Backup exported as nse_pulse_backup.json', 'bull');
+      });
+
+      document.getElementById('importJsonInput').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const parsed = JSON.parse(ev.target.result);
+            applyRestoredPayload(parsed);
+            scheduleCloudSync();
+            showToast('Backup restored successfully', 'bull');
+          } catch (err) {
+            showToast('Invalid backup JSON file', 'bear');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      window.addEventListener('resize', drawChart);
+    }
+
+    window.saveAutomationSetup = function(silent = false) {
+      try {
+        localStorage.setItem('nse_pulse_auto_setup', JSON.stringify({
+          autoTools: state.autoTools,
+          autoSignalFilter: state.autoSignalFilter,
+          autoHorizon: state.autoHorizon
+        }));
+        if (!silent) showToast('Automation setup saved', 'bull');
+      } catch (e) {}
+      scheduleCloudSync();
+    };
+
+    window.setAutoHorizon = function(h) {
+      state.autoHorizon = h;
+      saveAutomationSetup(true);
+      renderPortfolioAndOrders();
+    };
+
+    window.toggleAutoTool = function(key) {
+      state.autoTools[key] = !state.autoTools[key];
+      saveAutomationSetup(true);
+      renderPortfolioAndOrders();
+    };
+
+    window.setAutoFilter = function(val) {
+      state.autoSignalFilter = val;
+      renderPortfolioAndOrders();
+    };
+
+    window.autoPrepareOrder = function(symbol, side) {
+      selectSymbol(symbol);
+      if (side === 'BUY') document.getElementById('btnSideBuy').click();
+      else document.getElementById('btnSideSell').click();
+      showToast(`Loaded ${side} signal for ${symbol} into Order Ticket`, side === 'BUY' ? 'bull' : 'bear');
+    };
+
+    function activateAutomationTab() {
+      state.bottomTab = 'automation';
+      document.querySelectorAll('.bottom-tab').forEach(t => {
+        if (t.dataset.tab === 'automation') {
+          t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600 to-emerald-600 text-white border border-emerald-400/50 shadow';
+        } else {
+          t.className = 'bottom-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white';
+        }
+      });
+      renderPortfolioAndOrders();
+      document.getElementById('bottomWorkspaceSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast('Relay code copied to clipboard', 'bull'); }
+      catch (e) { showToast('Copy failed — select code manually', 'bear'); }
+      ta.remove();
+    }
+
+    // Boot
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const savedWallet = JSON.parse(localStorage.getItem('nse_pulse_wallet') || 'null');
+        if (savedWallet && typeof savedWallet.availableMargin === 'number') {
+          state.availableMargin = savedWallet.availableMargin;
+          state.realizedPnl = savedWallet.realizedPnl || 0;
+          state.positions = Array.isArray(savedWallet.positions) ? savedWallet.positions : [];
+          state.openOrders = Array.isArray(savedWallet.openOrders) ? savedWallet.openOrders : [];
+          state.trades = Array.isArray(savedWallet.trades) ? savedWallet.trades : [];
+        }
+      } catch (e) {}
+      try {
+        const savedSettings = JSON.parse(localStorage.getItem('nse_pulse_settings') || 'null');
+        if (savedSettings) state.settings = { ...state.settings, ...savedSettings };
+      } catch (e) {}
+      try {
+        const saved = JSON.parse(localStorage.getItem('nse_pulse_auto_setup') || 'null');
+        if (saved) {
+          if (saved.autoTools) state.autoTools = { ...state.autoTools, ...saved.autoTools };
+          if (saved.autoSignalFilter) state.autoSignalFilter = saved.autoSignalFilter;
+          if (saved.autoHorizon) state.autoHorizon = saved.autoHorizon;
+        }
+      } catch (e) {}
+      initInstruments();
+      setupListeners();
+      renderAll();
+      setTickSpeed(0);
+    });
+
+    // Auto-connect to local/hosted Node.js /api/nse backend if served from Express
+    async function pollLocalNseBackend() {
+      if (window.location.protocol === 'file:' || window.location.hostname.includes('usercontent')) return;
+      try {
+        const res = await fetch('/api/nse/quotes');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.ok || !data.quotes) return;
+        Object.entries(data.quotes).forEach(([sym, q]) => {
+          const inst = state.instruments[sym];
+          if (!inst || !q.ltp) return;
+          inst.ltp = +q.ltp.toFixed(2);
+          if (q.open) inst.open = +q.open.toFixed(2);
+          if (q.high) inst.high = +q.high.toFixed(2);
+          if (q.low) inst.low = +q.low.toFixed(2);
+          if (q.prevClose) inst.prevClose = +q.prevClose.toFixed(2);
+          if (q.vol) inst.vol = q.vol;
+          if (Array.isArray(q.candles) && q.candles.length) {
+            inst.candles[state.timeframe] = q.candles;
+          }
+          analyzeInstrument(inst);
+        });
+        checkPendingOrders();
+        monitorBoughtPositions();
+        renderAll();
+      } catch (e) {}
+    }
+    window.addEventListener('DOMContentLoaded', () => {
+      pollLocalNseBackend();
+      setInterval(() => { if (isNseMarketOpen()) pollLocalNseBackend(); }, 15000);
+    });
+
+  </script>
+</body>
+</html>
