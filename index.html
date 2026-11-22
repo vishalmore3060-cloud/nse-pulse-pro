@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NSE Pulse Pro — Real-Time Market Analysis & Trading Terminal</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -668,7 +667,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block text-gray-400 mb-1">Username</label>
-              <input id="sbEmailInput" type="text" autocomplete="username" placeholder="Enter username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+              <input id="sbEmailInput" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Enter username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label class="block text-gray-400 mb-1">Password</label>
@@ -714,7 +713,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block text-gray-400 mb-1">Username</label>
-              <input id="resetUserInput" type="text" placeholder="Enter your username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500" />
+              <input id="resetUserInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Enter your username" class="w-full bg-panel border border-border rounded-lg px-3 py-2 text-white placeholder-gray-500" />
             </div>
             <div>
               <label class="block text-gray-400 mb-1">New Password (min 6 chars)</label>
@@ -1357,15 +1356,44 @@ grant select, insert, update on table public.app_accounts to anon, authenticated
       return 'h_' + (h >>> 0).toString(16);
     }
 
+    function getSbConfig() {
+      const urlEl = document.getElementById('sbUrlInput');
+      const keyEl = document.getElementById('sbKeyInput');
+      const url = (urlEl && urlEl.value.trim()) || 'https://ktpscalmaqcahxotucis.supabase.co';
+      const key = (keyEl && keyEl.value.trim()) || 'sb_publishable_fDHhsYGY-xRFW4pIVMn0Jw_SHOg0XcM';
+      return { url: url.replace(/\/$/, ''), key };
+    }
+
+    async function sbRest(method, query, body = null) {
+      const { url, key } = getSbConfig();
+      const headers = {
+        'apikey': key,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      };
+      const res = await fetch(`${url}/rest/v1/${query}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch (e) {}
+      if (!res.ok) {
+        const msg = (json && (json.message || json.hint || json.details)) || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return json;
+    }
+
     async function pushStateToSupabase(silent = true) {
-      if (!state.sbClient || !state.sbUser) return false;
+      if (!state.sbUser || state.sbUser.isLocal) return false;
       try {
         const uname = (state.sbUser.username || state.sbUser.id).toLowerCase();
-        const { error } = await state.sbClient
-          .from('app_accounts')
-          .update({ state_json: buildCloudPayload(), updated_at: new Date().toISOString() })
-          .eq('username', uname);
-        if (error) throw error;
+        await sbRest('PATCH', `app_accounts?username=eq.${encodeURIComponent(uname)}`, {
+          state_json: buildCloudPayload(),
+          updated_at: new Date().toISOString()
+        });
         const lbl = document.getElementById('sbLastSyncText');
         if (lbl) lbl.textContent = 'Synced ' + new Date().toLocaleTimeString('en-IN', { hour12: false });
         if (!silent) showToast('Saved portfolio & settings to online database', 'bull');
@@ -1377,17 +1405,12 @@ grant select, insert, update on table public.app_accounts to anon, authenticated
     }
 
     async function pullStateFromSupabase(silent = false) {
-      if (!state.sbClient || !state.sbUser) return false;
+      if (!state.sbUser || state.sbUser.isLocal) return false;
       try {
         const uname = (state.sbUser.username || state.sbUser.id).toLowerCase();
-        const { data, error } = await state.sbClient
-          .from('app_accounts')
-          .select('state_json')
-          .eq('username', uname)
-          .maybeSingle();
-        if (error) throw error;
-        if (data && data.state_json) {
-          applyRestoredPayload(data.state_json);
+        const rows = await sbRest('GET', `app_accounts?username=eq.${encodeURIComponent(uname)}&select=state_json`);
+        if (Array.isArray(rows) && rows[0] && rows[0].state_json) {
+          applyRestoredPayload(rows[0].state_json);
           if (!silent) showToast('Restored portfolio & virtual cash from online database', 'bull');
         }
         return true;
@@ -1414,7 +1437,7 @@ grant select, insert, update on table public.app_accounts to anon, authenticated
         saveLocalUserSnapshot();
         return;
       }
-      if (!state.sbClient || !state.sbUser) return;
+      if (!state.sbUser) return;
       if (state.sbSyncTimer) clearTimeout(state.sbSyncTimer);
       state.sbSyncTimer = setTimeout(() => pushStateToSupabase(true), 800);
     }
@@ -3122,22 +3145,12 @@ const { WebSocketV2 } = require('smartapi-javascript');
       });
 
       function initSupabaseFromInputs() {
-        const url = sbUrlInp.value.trim();
-        const key = sbKeyInp.value.trim();
+        const { url, key } = getSbConfig();
         if (!url.startsWith('https://') || !key) {
-          showSbStatus('Enter your valid Supabase Project URL (https://...) and Anon Key.', false);
+          showSbStatus('Database configuration missing.', false);
           return null;
         }
-        if (!window.supabase || !window.supabase.createClient) {
-          showSbStatus('Supabase library is still loading. Try again in a moment.', false);
-          return null;
-        }
-        try {
-          localStorage.setItem('nse_pulse_sb_url', url);
-          localStorage.setItem('nse_pulse_sb_key', key);
-        } catch (e) {}
-        state.sbClient = window.supabase.createClient(url, key);
-        return state.sbClient;
+        return { url, key };
       }
 
       function refreshDbModeBadge() {
@@ -3162,8 +3175,7 @@ const { WebSocketV2 } = require('smartapi-javascript');
         sbUrlInp.value = savedSbUrl;
         sbKeyInp.value = savedSbKey;
         refreshDbModeBadge();
-        if (savedSbUrl && savedSbKey && window.supabase && window.supabase.createClient) {
-          state.sbClient = window.supabase.createClient(savedSbUrl, savedSbKey);
+        if (savedSbUrl && savedSbKey) {
           const activeOnline = JSON.parse(localStorage.getItem('nse_pulse_active_online_user') || 'null');
           if (activeOnline && activeOnline.username) {
             state.sbUser = { id: activeOnline.username, username: activeOnline.username, isLocal: false };
@@ -3236,22 +3248,16 @@ const { WebSocketV2 } = require('smartapi-javascript');
         const pwHash = await hashSecret(password);
         const uname = username.toLowerCase();
 
-        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
-          const client = initSupabaseFromInputs();
-          if (!client) return;
+        if (getSbConfig().url && getSbConfig().key) {
           try {
-            const { data, error } = await client
-              .from('app_accounts')
-              .select('username, password_hash, state_json')
-              .eq('username', uname)
-              .maybeSingle();
-            if (error) throw error;
+            const rows = await sbRest('GET', `app_accounts?username=eq.${encodeURIComponent(uname)}&select=username,password_hash,state_json`);
+            const data = Array.isArray(rows) ? rows[0] : null;
             if (!data || data.password_hash !== pwHash) {
-              showSbStatus('Invalid username or password in online database.', false);
+              showSbStatus('Invalid username or password. If new, switch to Create Account.', false);
               return;
             }
             state.sbUser = { id: uname, username, isLocal: false };
-            localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username }));
+            try { localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username })); } catch (e) {}
             if (data.state_json) applyRestoredPayload(data.state_json);
             updateCloudAuthUI();
             cModal.classList.add('hidden');
@@ -3298,17 +3304,11 @@ const { WebSocketV2 } = require('smartapi-javascript');
         const pwHash = await hashSecret(password);
         const uname = username.toLowerCase();
 
-        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
-          const client = initSupabaseFromInputs();
-          if (!client) return;
+        if (getSbConfig().url && getSbConfig().key) {
           try {
-            const { data: existing } = await client
-              .from('app_accounts')
-              .select('username')
-              .eq('username', uname)
-              .maybeSingle();
-            if (existing) {
-              showSbStatus('Username already exists in online database. Use Log In.', false);
+            const existingRows = await sbRest('GET', `app_accounts?username=eq.${encodeURIComponent(uname)}&select=username`);
+            if (Array.isArray(existingRows) && existingRows.length > 0) {
+              showSbStatus('Username already exists. Switch to Log In.', false);
               return;
             }
             const freshPayload = {
@@ -3320,7 +3320,7 @@ const { WebSocketV2 } = require('smartapi-javascript');
               openOrders: [],
               trades: []
             };
-            const { error } = await client.from('app_accounts').insert({
+            await sbRest('POST', 'app_accounts', {
               username: uname,
               password_hash: pwHash,
               q_city: city,
@@ -3329,9 +3329,8 @@ const { WebSocketV2 } = require('smartapi-javascript');
               state_json: freshPayload,
               updated_at: new Date().toISOString()
             });
-            if (error) throw error;
             state.sbUser = { id: uname, username, isLocal: false };
-            localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username }));
+            try { localStorage.setItem('nse_pulse_active_online_user', JSON.stringify({ username })); } catch (e) {}
             applyRestoredPayload(freshPayload);
             updateCloudAuthUI();
             showSbStatus(`Account "${username}" saved to online Supabase database!`, true);
@@ -3387,16 +3386,10 @@ const { WebSocketV2 } = require('smartapi-javascript');
         const uname = username.toLowerCase();
         const newHash = await hashSecret(newPw);
 
-        if (sbUrlInp.value.trim() && sbKeyInp.value.trim()) {
-          const client = initSupabaseFromInputs();
-          if (!client) return;
+        if (getSbConfig().url && getSbConfig().key) {
           try {
-            const { data, error } = await client
-              .from('app_accounts')
-              .select('q_city, q_fruit, q_sport')
-              .eq('username', uname)
-              .maybeSingle();
-            if (error) throw error;
+            const rows = await sbRest('GET', `app_accounts?username=eq.${encodeURIComponent(uname)}&select=q_city,q_fruit,q_sport`);
+            const data = Array.isArray(rows) ? rows[0] : null;
             if (!data) {
               showSbStatus('Username not found in online database.', false);
               return;
@@ -3405,11 +3398,10 @@ const { WebSocketV2 } = require('smartapi-javascript');
               showSbStatus('Security answers do not match. All 3 answers must be correct.', false);
               return;
             }
-            const { error: updErr } = await client
-              .from('app_accounts')
-              .update({ password_hash: newHash, updated_at: new Date().toISOString() })
-              .eq('username', uname);
-            if (updErr) throw updErr;
+            await sbRest('PATCH', `app_accounts?username=eq.${encodeURIComponent(uname)}`, {
+              password_hash: newHash,
+              updated_at: new Date().toISOString()
+            });
             document.getElementById('sbEmailInput').value = username;
             document.getElementById('sbPasswordInput').value = newPw;
             saveRememberedCreds(username, newPw);
